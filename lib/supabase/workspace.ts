@@ -4,6 +4,12 @@ import type { Json } from "./database.types";
 type WorkspacePart = { id: string; code: string; label: string; title: string; body: string; visible: boolean };
 export type WorkspacePayload = { productName: string; origin: string; weight: string; theme: string; parts: WorkspacePart[] };
 
+const REMOTE_PRODUCT_ID_KEY = "princefarm-remote-product-id";
+
+export function clearRemoteProductLink() {
+  window.localStorage.removeItem(REMOTE_PRODUCT_ID_KEY);
+}
+
 export async function sendMagicLink(client: SupabaseClient, email: string) {
   return client.auth.signInWithOtp({
     email,
@@ -30,7 +36,7 @@ export async function saveWorkspace(client: SupabaseClient, user: User, payload:
     organizationId = data.id;
   }
 
-  let productId = window.localStorage.getItem("princefarm-remote-product-id");
+  let productId = window.localStorage.getItem(REMOTE_PRODUCT_ID_KEY);
   if (productId) {
     const { data } = await client.from("products").select("id").eq("id", productId).eq("owner_id", user.id).maybeSingle();
     if (!data) productId = null;
@@ -48,7 +54,7 @@ export async function saveWorkspace(client: SupabaseClient, user: User, payload:
     if (error) throw error;
     const createdProductId = data.id as string;
     productId = createdProductId;
-    window.localStorage.setItem("princefarm-remote-product-id", createdProductId);
+    window.localStorage.setItem(REMOTE_PRODUCT_ID_KEY, createdProductId);
   } else {
     const { error } = await client.from("products").update({ name: payload.productName, theme_key: payload.theme, status: "review" }).eq("id", productId);
     if (error) throw error;

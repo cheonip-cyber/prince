@@ -44,7 +44,7 @@ import { toPng } from "html-to-image";
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import { getCurrentUser, saveWorkspace, sendMagicLink } from "@/lib/supabase/workspace";
+import { clearRemoteProductLink, getCurrentUser, saveWorkspace, sendMagicLink } from "@/lib/supabase/workspace";
 
 type ThemeKey = "seasonal" | "premium" | "natural";
 type LayoutKey = "default" | "card" | "wide" | "split" | "collage" | "circle" | "info";
@@ -88,6 +88,8 @@ type Snapshot = {
   origin: string;
   weight: string;
   theme: ThemeKey;
+  mediaAssets: MediaAsset[];
+  heroImage: string;
 };
 
 const initialParts: Part[] = [
@@ -256,6 +258,7 @@ export default function Studio() {
   const [cloudBusy, setCloudBusy] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [saved, setSaved] = useState(true);
+  const [saveTarget, setSaveTarget] = useState<"session" | "cloud">("session");
   const [generating, setGenerating] = useState(false);
   const [activeEditTab, setActiveEditTab] = useState<EditTab>("content");
   const [draggedPartId, setDraggedPartId] = useState<string | null>(null);
@@ -391,26 +394,30 @@ export default function Studio() {
   const saveVersion = async (label = "수동 저장") => {
     const snapshot: Snapshot = {
       id: crypto.randomUUID(), label, savedAt: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
-      parts, productName, origin, weight, theme,
+      parts, productName, origin, weight, theme, mediaAssets, heroImage,
     };
     setSnapshots((current) => [snapshot, ...current].slice(0, 8));
-    setSaved(true);
     if (supabase && cloudUser) {
       try {
         setCloudBusy(true);
         const result = await saveWorkspace(supabase, cloudUser, { productName, origin, weight, theme, parts });
+        setSaved(true);
+        setSaveTarget("cloud");
         flash(`Supabase에 v${result.versionNumber}으로 저장했습니다`);
       } catch (error) {
         flash(error instanceof Error ? `클라우드 저장 실패: ${error.message}` : "클라우드 저장에 실패했습니다");
       } finally { setCloudBusy(false); }
     } else {
-      flash("현재 편집본을 브라우저에 저장했습니다");
+      setSaved(true);
+      setSaveTarget("session");
+      flash("현재 편집본을 이 세션의 버전 기록에 남겼습니다 (새로고침하면 사라져요)");
     }
   };
 
   const restoreVersion = (snapshot: Snapshot) => {
     setParts(snapshot.parts); setProductName(snapshot.productName); setOrigin(snapshot.origin); setWeight(snapshot.weight); setTheme(snapshot.theme);
-    setSelectedId(snapshot.parts[0]?.id ?? "hero"); setShowVersions(false); flash(`${snapshot.label} 버전을 복원했습니다`);
+    setMediaAssets(snapshot.mediaAssets); setHeroImage(snapshot.heroImage);
+    setSelectedId(snapshot.parts[0]?.id ?? "hero"); setShowVersions(false); flash(`${snapshot.label} 버전을 사진과 함께 복원했습니다`);
   };
 
   const handleDraftFiles = async (fileList?: FileList | File[]) => {
@@ -454,10 +461,9 @@ export default function Studio() {
       : generated;
 
     setParts(placed); setProductName(noun); setOrigin(nextOrigin); setWeight(nextWeight); setSelectedId("hero"); setTheme("seasonal");
-    if (newAssets.length) {
-      setMediaAssets((current) => [...current, ...newAssets]);
-      setHeroImage(newAssets[0].src);
-    }
+    setMediaAssets(newAssets);
+    setHeroImage(newAssets[0]?.src ?? "/peach-hero.svg");
+    clearRemoteProductLink();
     setShowNewProduct(false); setActiveView("editor"); setSaved(false);
     setDraft({ name: "", origin: "", weight: "", category: "과일" });
     setDraftPhotos([]);
@@ -744,7 +750,7 @@ export default function Studio() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand"><span className="brand-mark"><Leaf size={19} strokeWidth={2.4} /></span><span>프린스팜</span><em>STUDIO</em></div>
-        <div className="project-title"><button className="icon-btn"><ArrowLeft size={18} /></button><div><strong>{productName}</strong><span>{saved ? <><Check size={13} /> 모든 변경사항 저장됨</> : <><Clock3 size={13} /> 저장되지 않은 변경사항</>}</span></div></div>
+        <div className="project-title"><button className="icon-btn"><ArrowLeft size={18} /></button><div><strong>{productName}</strong><span>{saved ? (saveTarget === "cloud" ? <><Cloud size={13} /> 클라우드에 저장됨</> : <><Check size={13} /> 이 세션에 저장됨</>) : <><Clock3 size={13} /> 저장되지 않은 변경사항</>}</span></div></div>
         <div className="top-actions">
           <button className={`text-btn cloud-btn ${cloudUser ? "connected" : ""}`} onClick={() => setShowCloudSettings(true)}><Cloud size={16} /> {cloudBusy ? "저장 중" : cloudUser ? "클라우드 연결됨" : "클라우드"}</button>
           <button className="text-btn new-product-btn" onClick={() => setShowNewProduct(true)}><Plus size={16} /> 새 상품</button>
@@ -759,7 +765,7 @@ export default function Studio() {
           <button onClick={exportHtml}><FileCode2 size={18} /><div><strong>반응형 HTML</strong><small>자사몰용 소스</small></div></button>
           <button onClick={exportJson}><FileJson2 size={18} /><div><strong>콘텐츠 JSON</strong><small>사실·카피 원본</small></div></button>
         </div>}
-        {showVersions && <div className="popover version-popover"><b>버전 기록</b><button onClick={() => restoreVersion({ id:"initial", label:"최초 생성", savedAt:"기본", parts:initialParts, productName:"햇살담은 영천 백도", origin:"경상북도 영천시", weight:"2kg · 8~10과", theme:"seasonal" })}><RotateCcw size={17} /><div><strong>v1 · 최초 생성</strong><small>기본 예시로 복원</small></div></button>{snapshots.map((snapshot) => <button key={snapshot.id} onClick={() => restoreVersion(snapshot)}><Clock3 size={17} /><div><strong>{snapshot.label}</strong><small>오늘 {snapshot.savedAt}</small></div></button>)}<button><CheckCircle2 size={17} /><div><strong>현재 편집본</strong><small>브라우저 자동 저장</small></div></button></div>}
+        {showVersions && <div className="popover version-popover"><b>버전 기록</b><span className="version-popover-hint">이 목록은 현재 세션에서만 유지되며 새로고침하면 사라집니다.</span><button onClick={() => restoreVersion({ id:"initial", label:"최초 생성", savedAt:"기본", parts:initialParts, productName:"햇살담은 영천 백도", origin:"경상북도 영천시", weight:"2kg · 8~10과", theme:"seasonal", mediaAssets:[], heroImage:"/peach-hero.svg" })}><RotateCcw size={17} /><div><strong>v1 · 최초 생성</strong><small>기본 예시로 복원</small></div></button>{snapshots.map((snapshot) => <button key={snapshot.id} onClick={() => restoreVersion(snapshot)}><Clock3 size={17} /><div><strong>{snapshot.label}</strong><small>오늘 {snapshot.savedAt}</small></div></button>)}<button><CheckCircle2 size={17} /><div><strong>현재 편집본</strong><small>지금 편집 중인 내용</small></div></button></div>}
       </header>
 
       <main className="workspace">
