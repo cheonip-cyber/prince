@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 type RequestBody = {
@@ -58,12 +59,14 @@ export async function POST(request: Request) {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}` },
         body: form,
+        cache: "no-store",
       });
     } else {
       response = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, prompt, size: "1024x1024", quality: "medium" }),
+        cache: "no-store",
       });
     }
     const result = await response.json() as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };

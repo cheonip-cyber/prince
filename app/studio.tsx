@@ -266,6 +266,7 @@ export default function Studio() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [draft, setDraft] = useState({ name: "", origin: "", weight: "", category: "과일" });
   const previewRef = useRef<HTMLDivElement>(null);
+  const partSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const supabase = useMemo(() => createClient(), []);
 
   const selected = parts.find((part) => part.id === selectedId) ?? parts[0];
@@ -302,6 +303,11 @@ export default function Studio() {
     } catch { /* damaged local data falls back to the safe sample */ }
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (activeView !== "editor") return;
+    partSectionRefs.current[selectedId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedId, activeView]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -353,49 +359,68 @@ export default function Studio() {
     setSaved(false);
   };
 
-  const regenerate = () => {
+  const regenerateInstructions = {
+    luxury: "더 고급스럽고 품격 있는 표현으로",
+    concise: "더 간결하고 임팩트 있게, 짧은 문장으로",
+    factual: "수치와 정보 위주로 명확하게",
+  } as const;
+
+  const regenerate = async (instruction?: keyof typeof regenerateInstructions) => {
     setGenerating(true);
-    window.setTimeout(() => {
-      updateSelected("title", selected.id === "hero" ? "한입 베어 물면, 여름이 번집니다" : `${selected.label}, 더 쉽게 확인하세요`);
+    try {
+      const response = await fetch("/api/generate-copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "title",
+          instruction: instruction ? regenerateInstructions[instruction] : undefined,
+          part: { label: selected.label, title: selected.title, body: selected.body },
+          product: { name: productName, origin, weight },
+        }),
+      });
+      const result = await response.json() as { title?: string; body?: string; error?: string };
+      if (!response.ok || !result.title) throw new Error(result.error ?? "AI 문구 생성에 실패했습니다");
+      setParts((current) => current.map((part) => part.id === selected.id ? {
+        ...part,
+        title: result.title!.slice(0, 22),
+        body: result.body ? result.body.slice(0, 120) : part.body,
+      } : part));
+      setSaved(false);
+      flash("AI가 선택한 파츠의 문구를 새로 작성했습니다");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "AI 문구 생성에 실패했습니다");
+    } finally {
       setGenerating(false);
-      flash("선택한 파츠만 새로 작성했습니다");
-    }, 900);
+    }
   };
 
-  const regenerateReviews = () => {
-    const variants = [
-      [
-        ["향과 식감이 기대 이상이었어요", `${productName} 특유의 향이 은은하고 식감도 편안하게 즐기기 좋았어요.`, "향·식감 만족 후기"],
-        ["포장 상태가 깔끔해 만족했어요", "완충 포장이 단정하고 상품 상태를 확인하기 쉬워 안심됐어요.", "포장 만족 후기"],
-        ["구성과 안내가 한눈에 들어와요", `${weight} 구성과 보관 안내가 잘 정리되어 선택하기 편했습니다.`, "구성 만족 후기"],
-      ],
-      [
-        ["제철의 신선함이 잘 느껴져요", "받아본 뒤 알맞게 후숙하니 향과 과즙을 더 풍부하게 즐길 수 있었어요.", "신선도 만족 후기"],
-        ["열어보는 순간 정성이 느껴져요", "상품이 흐트러지지 않도록 꼼꼼하게 정돈된 포장이 인상적이었어요.", "배송 만족 후기"],
-        ["필요한 정보가 명확해서 좋아요", "원산지와 판매 단위, 보관 방법을 바로 확인할 수 있어 편리했어요.", "정보 만족 후기"],
-      ],
-      [
-        ["부드러운 맛을 좋아한다면 잘 맞아요", `${productName}의 특징이 잘 살아 있어 가족과 함께 즐기기 좋았어요.`, "맛 만족 후기"],
-        ["받는 사람을 생각한 구성이에요", "제품과 포장이 보기 좋게 정돈되어 있어 만족스럽게 받아봤어요.", "구성 만족 후기"],
-        ["다음에도 편하게 선택할 것 같아요", "상품 설명과 실제 구성 확인이 쉬워 다시 고르기에도 부담이 없었어요.", "재구매 기대 후기"],
-      ],
-    ];
-    const next = variants[Math.floor(Math.random() * variants.length)];
+  const regenerateReviews = async () => {
     setGenerating(true);
-    window.setTimeout(() => {
+    try {
+      const response = await fetch("/api/generate-copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "reviews", product: { name: productName, origin, weight } }),
+      });
+      const result = await response.json() as { reviews?: Array<{ title: string; body: string; author: string }>; error?: string };
+      if (!response.ok || !result.reviews || result.reviews.length < 3) throw new Error(result.error ?? "AI 후기 생성에 실패했습니다");
+      const [r1, r2, r3] = result.reviews;
       setParts((current) => current.map((part) => part.id === selected.id ? {
         ...part,
         copy: {
           ...part.copy,
-          review1Title: next[0][0], review1Body: next[0][1], review1Author: next[0][2],
-          review2Title: next[1][0], review2Body: next[1][1], review2Author: next[1][2],
-          review3Title: next[2][0], review3Body: next[2][1], review3Author: next[2][2],
+          review1Title: r1.title, review1Body: r1.body, review1Author: r1.author,
+          review2Title: r2.title, review2Body: r2.body, review2Author: r2.author,
+          review3Title: r3.title, review3Body: r3.body, review3Author: r3.author,
         },
       } : part));
-      setGenerating(false);
       setSaved(false);
-      flash("상품에 맞춘 후기 문구 3개를 새로 적용했습니다");
-    }, 650);
+      flash("AI가 상품에 맞춘 후기 문구 3개를 새로 작성했습니다");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "AI 후기 생성에 실패했습니다");
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const saveVersion = async (label = "수동 저장") => {
@@ -782,7 +807,7 @@ export default function Studio() {
                     "--part-font-scale": (part.fontScale ?? 100) / 100,
                   } as CSSProperties;
                   return (
-                  <section key={part.id} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
+                  <section key={part.id} ref={(el) => { partSectionRefs.current[part.id] = el; }} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
                     <div className="part-hover-actions"><button type="button" className="part-hover-hide" aria-label={`${part.label} 파츠 숨기기`} title="이 파츠 숨기기" onClick={(event) => { event.stopPropagation(); setPartVisibility(part.id, false); }}><EyeOff size={14}/><span>숨기기</span></button><button type="button" className="part-hover-delete" aria-label={`${part.label} 파츠 삭제`} title="이 파츠 삭제" onClick={(event) => { event.stopPropagation(); deletePart(part.id); }}><Trash2 size={14}/><span>삭제</span></button></div>
                     {part.id === "fixedNotice" && <FixedNoticePart style={part.fixedNoticeStyle ?? "harvest"}/>}
                     {part.id === "hero" && <>
@@ -813,7 +838,7 @@ export default function Studio() {
           </div>
           <div className="edit-scroll">
             {activeEditTab === "content" ? selected.id === "fixedNotice" ? <div className="fixed-content-lock"><LockKeyhole size={28}/><strong>내용이 잠긴 고정 안내 파츠입니다.</strong><p>첨부 이미지의 교환·반품 안내 문구를 그대로 유지합니다. 내용 편집과 AI 재작성은 제공하지 않으며 디자인 버전만 변경할 수 있습니다.</p><button onClick={() => setActiveEditTab("design")}><Palette size={15}/> 디자인 3종 선택</button></div> : <>
-              <div className="ai-actions"><div><Sparkles size={17}/><strong>AI 간편 수정</strong><small>이 파츠에만 적용됩니다</small></div>{selected.id !== "reviews" && <div className="chip-row"><button onClick={regenerate}>더 고급스럽게</button><button onClick={regenerate}>더 간결하게</button><button onClick={regenerate}>정보 중심으로</button></div>}<button className="regenerate-btn" onClick={selected.id === "reviews" ? regenerateReviews : regenerate} disabled={generating}>{generating ? <LoaderCircle className="spin" size={16}/> : <RefreshCcw size={16}/>} {selected.id === "reviews" ? "후기 문구 3개 다시 생성" : "제목만 다시 생성"}</button></div>
+              <div className="ai-actions"><div><Sparkles size={17}/><strong>AI 간편 수정</strong><small>이 파츠에만 적용됩니다</small></div>{selected.id !== "reviews" && <div className="chip-row"><button onClick={() => regenerate("luxury")} disabled={generating}>더 고급스럽게</button><button onClick={() => regenerate("concise")} disabled={generating}>더 간결하게</button><button onClick={() => regenerate("factual")} disabled={generating}>정보 중심으로</button></div>}<button className="regenerate-btn" onClick={() => (selected.id === "reviews" ? regenerateReviews() : regenerate())} disabled={generating}>{generating ? <LoaderCircle className="spin" size={16}/> : <RefreshCcw size={16}/>} {selected.id === "reviews" ? "후기 문구 3개 다시 생성" : "제목만 다시 생성"}</button></div>
               <div className="field-group"><label>제목 <span>{selected.title.length}/22</span></label><textarea value={selected.title} onChange={(e) => updateSelected("title", e.target.value)} rows={2}/></div>
               <div className="field-group"><label>본문 <span>{selected.body.length}/120</span></label><textarea value={selected.body} onChange={(e) => updateSelected("body", e.target.value)} rows={5}/><small><CheckCircle2 size={13}/> 확인된 상품 사실과 연결됨</small></div>
               <div className="microcopy-heading"><strong>화면의 나머지 문구</strong><small>이 파츠에 보이는 작은 문구까지 모두 수정할 수 있습니다.</small></div>
