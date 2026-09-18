@@ -5,9 +5,11 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Camera,
   Check,
   CheckCircle2,
   ChevronDown,
+  ClipboardList,
   Clock3,
   Cloud,
   Download,
@@ -19,9 +21,11 @@ import {
   LayoutGrid,
   Leaf,
   LoaderCircle,
+  LockKeyhole,
   LogIn,
   LogOut,
   MoreHorizontal,
+  Package,
   Palette,
   PanelLeftClose,
   Plus,
@@ -33,6 +37,7 @@ import {
   Sparkles,
   Trash2,
   UploadCloud,
+  Users,
   X,
 } from "lucide-react";
 import { toPng } from "html-to-image";
@@ -47,6 +52,7 @@ type EditTab = "content" | "design" | "image";
 type ImageModel = "gpt-image-2.5-flare" | "gpt-image-2.5-sunburst";
 type FontKey = "clean" | "serif" | "friendly";
 type ImageRole = "gift" | "origin" | "package" | "closeup";
+type FixedNoticeStyle = "harvest" | "clean" | "premium";
 type Part = {
   id: string;
   code: string;
@@ -61,6 +67,7 @@ type Part = {
   imageZoom?: number;
   fontFamily?: FontKey;
   fontScale?: number;
+  fixedNoticeStyle?: FixedNoticeStyle;
   copy?: Record<string, string>;
 };
 
@@ -123,11 +130,18 @@ const imageRoleMap = {
   closeup: { label: "제품 클로즈업", description: "색·결·신선함이 잘 보이는 근접 장면" },
 } satisfies Record<ImageRole, { label: string; description: string }>;
 
+const fixedNoticeStyles = {
+  harvest: { label: "농장 일러스트형", description: "따뜻한 베이지와 농산물 색감" },
+  clean: { label: "클린 안내서형", description: "화이트·그린 중심의 명확한 정보" },
+  premium: { label: "프리미엄 보증서형", description: "딥그린·골드 중심의 고급 안내" },
+} satisfies Record<FixedNoticeStyle, { label: string; description: string }>;
+
 const riskyTerms = ["최고", "유일", "1위", "항암", "면역력", "무농약", "유기농", "15브릭스"];
 const optionalParts: Part[] = [
   { id: "origin", code: "P05", label: "산지·선별", title: "좋은 땅에서 정성껏 골랐습니다", body: "산지에서 상태를 살펴 선별하고 신선함을 지켜 포장합니다.", visible: true },
   { id: "evidence", code: "P08", label: "품질 근거", title: "확인 가능한 정보만 담았습니다", body: "등록된 인증서나 측정 근거가 있을 때만 품질 정보로 표시합니다.", visible: true },
   { id: "usage", code: "P09", label: "섭취·활용", title: "더 맛있게 즐기는 방법", body: "깨끗이 씻어 그대로 즐기거나 차갑게 보관해 시원하게 드셔보세요.", visible: true },
+  { id: "fixedNotice", code: "P14", label: "교환·반품 고정안내", title: "꼭 확인해주세요", body: "교환·반품 및 개인정보 제공 안내", visible: true, fixedNoticeStyle: "harvest" },
 ];
 const allPartTemplates = [...initialParts, ...optionalParts].sort((a, b) => a.code.localeCompare(b.code));
 
@@ -434,7 +448,7 @@ export default function Studio() {
       const insertAt = noticeIndex < 0 ? current.length : noticeIndex;
       return [...current.slice(0, insertAt), { ...next }, ...current.slice(insertAt)];
     });
-    setSelectedId(next.id); setActiveView("editor"); setActiveEditTab("content"); setShowPartLibrary(false); setSaved(false);
+    setSelectedId(next.id); setActiveView("editor"); setActiveEditTab(next.id === "fixedNotice" ? "design" : "content"); setShowPartLibrary(false); setSaved(false);
     flash(`${next.code} ${next.label} 파츠를 추가했습니다`);
   };
 
@@ -478,6 +492,11 @@ export default function Studio() {
 
   const updateSelectedTypography = (field: "fontFamily" | "fontScale", value: FontKey | number) => {
     setParts((current) => current.map((part) => part.id === selected.id ? { ...part, [field]: value } : part));
+    setSaved(false);
+  };
+
+  const updateFixedNoticeStyle = (fixedNoticeStyle: FixedNoticeStyle) => {
+    setParts((current) => current.map((part) => part.id === selected.id ? { ...part, fixedNoticeStyle } : part));
     setSaved(false);
   };
 
@@ -728,7 +747,7 @@ export default function Studio() {
                 draggable
                 aria-label={`${part.label} 파츠, 드래그하여 순서 변경`}
                 className={`part-item ${selected.id === part.id ? "active" : ""} ${!part.visible ? "hidden-part" : ""} ${draggedPartId === part.id ? "dragging" : ""} ${dragOverPartId === part.id ? "drag-over" : ""}`}
-                onClick={() => { setSelectedId(part.id); setActiveView("editor"); }}
+                onClick={() => { setSelectedId(part.id); setActiveView("editor"); if (part.id === "fixedNotice") setActiveEditTab("design"); }}
                 onDragStart={(event) => { setDraggedPartId(part.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", part.id); }}
                 onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDragOverPartId(part.id); }}
                 onDrop={(event) => { event.preventDefault(); const sourceId = event.dataTransfer.getData("text/plain") || draggedPartId; if (sourceId) reorderParts(sourceId, part.id); setDraggedPartId(null); setDragOverPartId(null); }}
@@ -765,6 +784,7 @@ export default function Studio() {
                   return (
                   <section key={part.id} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
                     <div className="part-hover-actions"><button type="button" className="part-hover-hide" aria-label={`${part.label} 파츠 숨기기`} title="이 파츠 숨기기" onClick={(event) => { event.stopPropagation(); setPartVisibility(part.id, false); }}><EyeOff size={14}/><span>숨기기</span></button><button type="button" className="part-hover-delete" aria-label={`${part.label} 파츠 삭제`} title="이 파츠 삭제" onClick={(event) => { event.stopPropagation(); deletePart(part.id); }}><Trash2 size={14}/><span>삭제</span></button></div>
+                    {part.id === "fixedNotice" && <FixedNoticePart style={part.fixedNoticeStyle ?? "harvest"}/>}
                     {part.id === "hero" && <>
                       <div className={`photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" && galleryAssets.length ? galleryAssets : [{ id: "hero-fallback", src: assignedAsset?.src ?? heroImage }]).map((asset) => <img key={asset.id} src={asset.src} alt={`${productName} 대표 상품`} className="hero-photo" style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }} />)}</div>
                       <div className="hero-overlay"><span className="eyebrow">{copyOf(part, "kicker")}</span><h1>{part.title}</h1><p>{part.body}</p><div className="hero-meta"><span>{copyOf(part, "metaOrigin")}</span><span>{weight}</span><span>{copyOf(part, "metaCategory")}</span></div></div>
@@ -772,7 +792,7 @@ export default function Studio() {
                     {part.id === "summary" && <div className="summary-grid"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="summary-cards">{[1, 2, 3].map((number) => <article key={number}><b>{copyOf(part, `card${number}Number`)}</b><strong>{copyOf(part, `card${number}Title`)}</strong><span>{copyOf(part, `card${number}Body`)}</span></article>)}</div></div>}
                     {part.id === "audience" && <div className="split-part"><div><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><ul>{[1, 2, 3].map((number) => <li key={number}><Check size={16}/> {copyOf(part, `bullet${number}`)}</li>)}</ul></div><div className="peach-crop"><img src={assignedAsset?.src ?? heroImage} alt={productName} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/></div></div>}
                     {part.id === "reviews" && <div className="review-part"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="review-cards">{[1, 2, 3].map((number) => <article key={number}><div className="review-stars" aria-label="별점 5점">{[1, 2, 3, 4, 5].map((star) => <Star key={star} size={15} fill="currentColor"/>)}</div><strong>{copyOf(part, `review${number}Title`)}</strong><p>{copyOf(part, `review${number}Body`)}</p><small>{copyOf(part, `review${number}Author`)}</small></article>)}</div></div>}
-                    {!["hero", "summary", "audience", "reviews"].includes(part.id) && <>{(assignedAsset || (activeLayout === "collage" && galleryAssets.length > 0)) && <div className={`part-photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" ? galleryAssets : assignedAsset ? [assignedAsset] : []).map((asset) => <img key={asset.id} src={asset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>) }{assignedAsset?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <><div className="composition-grid">{[1, 2, 3].map((number) => <article key={number}><span>{number}</span><strong>{copyOf(part, `composition${number}Name`)}</strong><b>{copyOf(part, `composition${number}Value`)}</b></article>)}</div><p className="composition-note">{copyOf(part, "compositionNote")}</p><div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div></>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
+                    {!["hero", "summary", "audience", "reviews", "fixedNotice"].includes(part.id) && <>{(assignedAsset || (activeLayout === "collage" && galleryAssets.length > 0)) && <div className={`part-photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" ? galleryAssets : assignedAsset ? [assignedAsset] : []).map((asset) => <img key={asset.id} src={asset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>) }{assignedAsset?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <><div className="composition-grid">{[1, 2, 3].map((number) => <article key={number}><span>{number}</span><strong>{copyOf(part, `composition${number}Name`)}</strong><b>{copyOf(part, `composition${number}Value`)}</b></article>)}</div><p className="composition-note">{copyOf(part, "compositionNote")}</p><div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div></>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
                     {selected.id === part.id && <span className="selection-tag">선택됨</span>}
                   </section>
                   );
@@ -789,10 +809,10 @@ export default function Studio() {
           <div className="edit-tabs">
             <button className={activeEditTab === "content" ? "active" : ""} onClick={() => setActiveEditTab("content")}>콘텐츠</button>
             <button className={activeEditTab === "design" ? "active" : ""} onClick={() => setActiveEditTab("design")}>디자인</button>
-            <button className={activeEditTab === "image" ? "active" : ""} onClick={() => setActiveEditTab("image")}>이미지</button>
+            <button className={activeEditTab === "image" ? "active" : ""} disabled={selected.id === "fixedNotice"} onClick={() => setActiveEditTab("image")}>이미지</button>
           </div>
           <div className="edit-scroll">
-            {activeEditTab === "content" ? <>
+            {activeEditTab === "content" ? selected.id === "fixedNotice" ? <div className="fixed-content-lock"><LockKeyhole size={28}/><strong>내용이 잠긴 고정 안내 파츠입니다.</strong><p>첨부 이미지의 교환·반품 안내 문구를 그대로 유지합니다. 내용 편집과 AI 재작성은 제공하지 않으며 디자인 버전만 변경할 수 있습니다.</p><button onClick={() => setActiveEditTab("design")}><Palette size={15}/> 디자인 3종 선택</button></div> : <>
               <div className="ai-actions"><div><Sparkles size={17}/><strong>AI 간편 수정</strong><small>이 파츠에만 적용됩니다</small></div>{selected.id !== "reviews" && <div className="chip-row"><button onClick={regenerate}>더 고급스럽게</button><button onClick={regenerate}>더 간결하게</button><button onClick={regenerate}>정보 중심으로</button></div>}<button className="regenerate-btn" onClick={selected.id === "reviews" ? regenerateReviews : regenerate} disabled={generating}>{generating ? <LoaderCircle className="spin" size={16}/> : <RefreshCcw size={16}/>} {selected.id === "reviews" ? "후기 문구 3개 다시 생성" : "제목만 다시 생성"}</button></div>
               <div className="field-group"><label>제목 <span>{selected.title.length}/22</span></label><textarea value={selected.title} onChange={(e) => updateSelected("title", e.target.value)} rows={2}/></div>
               <div className="field-group"><label>본문 <span>{selected.body.length}/120</span></label><textarea value={selected.body} onChange={(e) => updateSelected("body", e.target.value)} rows={5}/><small><CheckCircle2 size={13}/> 확인된 상품 사실과 연결됨</small></div>
@@ -829,10 +849,12 @@ export default function Studio() {
               {!["hero", "summary", "audience", "reviews"].includes(selected.id) && <CopyField label="AI 이미지 배지" value={copyOf(selected, "imageBadge", "AI 연출 이미지")} onChange={(value) => updateSelectedCopy("imageBadge", value)}/>}
             </> : activeEditTab === "design" ? <>
               <div className="tab-intro"><Palette size={18}/><div><strong>파츠 디자인</strong><p>선택한 파츠의 구성과 페이지 전체 색감을 조정합니다.</p></div></div>
-              <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options layout-options-five">{layoutPresets.map(({key, label}) => { const currentLayout = selected.layout === "default" || !selected.layout ? "wide" : selected.layout === "card" ? "info" : selected.layout; return <button key={key} className={currentLayout === key ? "active" : ""} onClick={() => updateSelectedLayout(key)}><i className={`layout-preview-${key}`}/><span>{label}</span>{currentLayout === key && <Check size={13}/>}</button>; })}</div><small>콜라주는 업로드된 사진을 최대 4장까지 자동 조합합니다.</small></div>
-              <div className="field-group"><label>텍스트 폰트</label><div className="font-options">{(Object.keys(fontMap) as FontKey[]).map((key) => <button key={key} className={(selected.fontFamily ?? "clean") === key ? "active" : ""} onClick={() => updateSelectedTypography("fontFamily", key)} style={{fontFamily: fontMap[key].family}}><span><strong>{fontMap[key].label}</strong><small>{fontMap[key].sample}</small></span>{(selected.fontFamily ?? "clean") === key && <Check size={14}/>}</button>)}</div></div>
-              <div className="field-group"><label>폰트 크기 <span>{selected.fontScale ?? 100}%</span></label><div className="font-scale-control"><input aria-label="선택 파츠 폰트 크기" type="range" min="80" max="140" step="5" value={selected.fontScale ?? 100} onChange={(event) => updateSelectedTypography("fontScale", Number(event.target.value))}/><div><button onClick={() => updateSelectedTypography("fontScale", 90)}>작게</button><button onClick={() => updateSelectedTypography("fontScale", 100)}>기본</button><button onClick={() => updateSelectedTypography("fontScale", 120)}>크게</button></div></div><small>선택한 파츠의 제목·본문·보조 문구에 함께 적용됩니다.</small></div>
-              <div className="field-group"><label>페이지 테마</label><div className="theme-options">{(Object.keys(themeMap) as ThemeKey[]).map((key) => <button key={key} className={theme === key ? "active" : ""} onClick={() => { setTheme(key); setSaved(false); }}><span>{themeMap[key].swatches.map((color) => <i key={color} style={{background: color}} />)}</span><b>{themeMap[key].label}</b>{theme === key && <Check size={14}/>}</button>)}</div></div>
+              {selected.id === "fixedNotice" ? <div className="field-group fixed-style-picker"><label>고정 안내 디자인</label>{(Object.keys(fixedNoticeStyles) as FixedNoticeStyle[]).map((key) => <button key={key} className={(selected.fixedNoticeStyle ?? "harvest") === key ? "active" : ""} onClick={() => updateFixedNoticeStyle(key)}><span className={`fixed-style-swatch swatch-${key}`}><i/><i/><i/></span><span><strong>{fixedNoticeStyles[key].label}</strong><small>{fixedNoticeStyles[key].description}</small></span>{(selected.fixedNoticeStyle ?? "harvest") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>디자인을 바꿔도 안내 문구와 고객센터 정보는 변경되지 않습니다.</span></div></div> : <>
+                <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options layout-options-five">{layoutPresets.map(({key, label}) => { const currentLayout = selected.layout === "default" || !selected.layout ? "wide" : selected.layout === "card" ? "info" : selected.layout; return <button key={key} className={currentLayout === key ? "active" : ""} onClick={() => updateSelectedLayout(key)}><i className={`layout-preview-${key}`}/><span>{label}</span>{currentLayout === key && <Check size={13}/>}</button>; })}</div><small>콜라주는 업로드된 사진을 최대 4장까지 자동 조합합니다.</small></div>
+                <div className="field-group"><label>텍스트 폰트</label><div className="font-options">{(Object.keys(fontMap) as FontKey[]).map((key) => <button key={key} className={(selected.fontFamily ?? "clean") === key ? "active" : ""} onClick={() => updateSelectedTypography("fontFamily", key)} style={{fontFamily: fontMap[key].family}}><span><strong>{fontMap[key].label}</strong><small>{fontMap[key].sample}</small></span>{(selected.fontFamily ?? "clean") === key && <Check size={14}/>}</button>)}</div></div>
+                <div className="field-group"><label>폰트 크기 <span>{selected.fontScale ?? 100}%</span></label><div className="font-scale-control"><input aria-label="선택 파츠 폰트 크기" type="range" min="80" max="140" step="5" value={selected.fontScale ?? 100} onChange={(event) => updateSelectedTypography("fontScale", Number(event.target.value))}/><div><button onClick={() => updateSelectedTypography("fontScale", 90)}>작게</button><button onClick={() => updateSelectedTypography("fontScale", 100)}>기본</button><button onClick={() => updateSelectedTypography("fontScale", 120)}>크게</button></div></div><small>선택한 파츠의 제목·본문·보조 문구에 함께 적용됩니다.</small></div>
+                <div className="field-group"><label>페이지 테마</label><div className="theme-options">{(Object.keys(themeMap) as ThemeKey[]).map((key) => <button key={key} className={theme === key ? "active" : ""} onClick={() => { setTheme(key); setSaved(false); }}><span>{themeMap[key].swatches.map((color) => <i key={color} style={{background: color}} />)}</span><b>{themeMap[key].label}</b>{theme === key && <Check size={14}/>}</button>)}</div></div>
+              </>}
             </> : <>
               <div className="tab-intro"><ImageIcon size={18}/><div><strong>사진 자동 구성</strong><p>제품 사진 4~10장을 권장합니다. 적은 사진으로도 시작할 수 있어요.</p></div></div>
               <label className={`image-dropzone ${imageDragging ? "dragging" : ""}`} onDragEnter={(event) => { event.preventDefault(); setImageDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setImageDragging(false); }} onDrop={handleDrop}>
@@ -863,6 +885,42 @@ export default function Studio() {
       {toast && <div className="toast"><CheckCircle2 size={18}/>{toast}</div>}
     </div>
   );
+}
+
+function FixedNoticePart({ style }: { style: FixedNoticeStyle }) {
+  return <div className={`fixed-notice fixed-notice-${style}`}>
+    <header className="fixed-notice-header"><AlertTriangle size={28}/><h2>꼭 확인해주세요</h2></header>
+    <p className="fixed-notice-intro">신선식품의 특성상 정상적인 검품 및 발송되었음에도 불구하고 간혹<br/>배송중인 온도변화 및 택배 상하차 시 충격으로 인해 제품이 손상될 수 있습니다.<br/>제품 수령 시 제품상태를 확인하시고 배송 중 상품의 파손 및 제품의 문제로<br/>인해 교환 및 반품 요구 시 아래에 절차를 참고하세요.</p>
+    <div className="fixed-notice-deadline">※제품 수령 후 이틀내 접수요망</div>
+
+    <section className="fixed-notice-section fixed-return-section">
+      <h3><Package size={24}/> 교환 및 반품 방법 안내 <RefreshCcw size={24}/></h3>
+      <div className="fixed-policy-row is-no"><span>×</span><p>※ 신선식품의 특성상 원칙적으로 단순변심(크기,모양,색상,맛,단순 손상 제품등)의 사유로 교환 및 반품은 어렵습니다.</p></div>
+      <div className="fixed-policy-row is-yes"><span>✓</span><p>※ 제품 일부의 문제가 있을 경우 부분 환불을 기본으로 합니다.<br/>사전협의 없이 임의로 수취거절 또는 상품반송할 경우 왕복 배송료를 지불하여야 하며, 그 상품에 대하여 판매자는 책임을 지지 않습니다.</p></div>
+      <div className="fixed-notice-alert">※ 상품 수령 후 문제가 발생한 경우 반드시 사진을 찍어<br/><strong>수령일 기준 2일이내로</strong> 고객센터에 연락해주시기바랍니다.</div>
+    </section>
+
+    <section className="fixed-notice-section fixed-steps-section">
+      <h3><ClipboardList size={24}/> 접수 절차</h3>
+      <div className="fixed-step-grid">
+        <article><b>01</b><div className="fixed-step-icon"><Package/><Camera/></div><p>송장을 포함한<br/>박스 전체 사진과<br/>문제 부분 사진촬영</p></article>
+        <article><b>02</b><div className="fixed-step-icon"><Camera/><ClipboardList/></div><p>주문자 성함/운송장<br/>번호를 함께 기재하여<br/>문자나 카톡 또는 메일을<br/>통하여 제품 사진 전송</p></article>
+        <article><b>03</b><div className="fixed-step-icon"><Users/></div><p>부분반품 또는<br/>전체반품<br/>업체와 협의</p></article>
+      </div>
+    </section>
+
+    <section className="fixed-notice-section fixed-privacy-section">
+      <h3><LockKeyhole size={22}/> 개인정보 제공 활용 등의 안내</h3>
+      <ul>
+        <li>개인정보를 제공받는 자 - 상품 및 서비스 제공 위탁 / 중개업체, 택배사</li>
+        <li>개인정보 제공 범위 - 이름, 아이디, 전화번호, 구매정보, 상품 수령인 정보</li>
+        <li>제공받는 자의 이용 목적 및 정보 보유 및 이용기간 - 원활한 거래 진행,<br/>본인의사 확인, 상담 및 부정이용 방지등의 고객관리, 배송, 취소, 교환, 반품<br/>- 이용 목적 달성 시까지 보관. 단 관계법령이 규제에 의하여 일정기간 보관이<br/>필요한 경우 해당기간 만큼 보관 후 삭제</li>
+        <li>상품 구매 시 개인정보 활용에 동의 한 것으로 하며, 동의를 원하지 않으신<br/>고객님은 구매가 불가 합니다.</li>
+      </ul>
+    </section>
+
+    <footer>☎ 고객센터 : 070-8064-8861 (09:00~18:00, 주말/공휴일 휴무)</footer>
+  </div>;
 }
 
 function CopyField({ label, value, onChange, multiline = false, linked = false }: {
