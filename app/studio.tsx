@@ -35,7 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { toPng } from "html-to-image";
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getCurrentUser, saveWorkspace, sendMagicLink } from "@/lib/supabase/workspace";
@@ -44,6 +44,7 @@ type ThemeKey = "seasonal" | "premium" | "natural";
 type LayoutKey = "default" | "split" | "card";
 type EditTab = "content" | "design" | "image";
 type ImageModel = "gpt-image-2.5-flare" | "gpt-image-2.5-sunburst";
+type FontKey = "clean" | "serif" | "friendly";
 type Part = {
   id: string;
   code: string;
@@ -56,6 +57,8 @@ type Part = {
   imageAssetId?: string;
   imageFocus?: number;
   imageZoom?: number;
+  fontFamily?: FontKey;
+  fontScale?: number;
   copy?: Record<string, string>;
 };
 
@@ -95,6 +98,12 @@ const themeMap = {
   premium: { label: "프리미엄 강조형", swatches: ["#f5f0e8", "#263d35", "#bd9a59"] },
   natural: { label: "따뜻한 산지형", swatches: ["#f5eee2", "#a45f3b", "#6f7f4a"] },
 } satisfies Record<ThemeKey, { label: string; swatches: string[] }>;
+
+const fontMap = {
+  clean: { label: "깔끔한 고딕", sample: "상품 정보를 또렷하게", family: '"Noto Sans KR", sans-serif' },
+  serif: { label: "감성적인 명조", sample: "이야기와 품격을 담아", family: '"Noto Serif KR", serif' },
+  friendly: { label: "친근한 손글씨", sample: "따뜻하고 편안하게", family: '"Gowun Dodum", "Noto Sans KR", sans-serif' },
+} satisfies Record<FontKey, { label: string; sample: string; family: string }>;
 
 const riskyTerms = ["최고", "유일", "1위", "항암", "면역력", "무농약", "유기농", "15브릭스"];
 const optionalParts: Part[] = [
@@ -381,6 +390,11 @@ export default function Studio() {
     setSaved(false);
   };
 
+  const updateSelectedTypography = (field: "fontFamily" | "fontScale", value: FontKey | number) => {
+    setParts((current) => current.map((part) => part.id === selected.id ? { ...part, [field]: value } : part));
+    setSaved(false);
+  };
+
   const assignAsset = (assetId: string, partId = selected.id) => {
     const asset = mediaAssets.find((item) => item.id === assetId);
     if (!asset) return;
@@ -447,10 +461,9 @@ export default function Studio() {
 
   const generateMoodImage = async () => {
     const source = mediaAssets.find((asset) => asset.source === "uploaded");
-    if (!source) return flash("AI 연출의 기준이 될 제품 사진을 먼저 올려 주세요");
     setImageGenerating(true);
     try {
-      const response = await fetch("/api/generate-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: source.src, productName, theme: themeMap[theme].label, model: imageModel }) });
+      const response = await fetch("/api/generate-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: source?.src, productName, theme: themeMap[theme].label, model: imageModel }) });
       const result = await response.json() as { image?: string; error?: string };
       if (!response.ok || !result.image) throw new Error(result.error ?? "AI 이미지 생성에 실패했습니다");
       const asset: MediaAsset = { id: crypto.randomUUID(), src: result.image, name: `${productName}-AI-연출.png`, role: "AI 연출", source: "ai" };
@@ -458,7 +471,7 @@ export default function Studio() {
       setParts((current) => current.map((part) => part.id === selected.id ? { ...part, imageAssetId: asset.id, imageFocus: 50, imageZoom: 100 } : part));
       if (selected.id === "hero") setHeroImage(asset.src);
       setSaved(false);
-      flash(`${imageModel === "gpt-image-2.5-flare" ? "Flare 빠른 생성" : "Sunburst 정밀 보존"}으로 이미지를 만들었습니다`);
+      flash(`${source ? "제품 사진을 기준으로" : "상품명과 파츠 내용을 기준으로"} 이미지를 만들었습니다`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "AI 이미지 생성에 실패했습니다");
     } finally { setImageGenerating(false); }
@@ -653,19 +666,26 @@ export default function Studio() {
             <div className="canvas-scroll">
               <div className="preview-label"><span><span className="live-dot" /> 실시간 미리보기</span><span>860 × AUTO</span></div>
               <div className={`detail-page theme-${theme}`} ref={previewRef}>
-                {visibleParts.map((part) => (
-                  <section key={part.id} className={`preview-part preview-${part.id} layout-${part.layout ?? "default"} ${part.imageAssetId ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} onClick={() => setSelectedId(part.id)}>
+                {visibleParts.map((part) => {
+                  const assignedAsset = mediaAssets.find((asset) => asset.id === part.imageAssetId);
+                  const partStyle = {
+                    "--part-font-family": fontMap[part.fontFamily ?? "clean"].family,
+                    "--part-font-scale": (part.fontScale ?? 100) / 100,
+                  } as CSSProperties;
+                  return (
+                  <section key={part.id} className={`preview-part preview-${part.id} layout-${part.layout ?? "default"} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
                     <div className="part-hover-actions"><button type="button" className="part-hover-hide" aria-label={`${part.label} 파츠 숨기기`} title="이 파츠 숨기기" onClick={(event) => { event.stopPropagation(); setPartVisibility(part.id, false); }}><EyeOff size={14}/><span>숨기기</span></button><button type="button" className="part-hover-delete" aria-label={`${part.label} 파츠 삭제`} title="이 파츠 삭제" onClick={(event) => { event.stopPropagation(); deletePart(part.id); }}><Trash2 size={14}/><span>삭제</span></button></div>
                     {part.id === "hero" && <>
-                      <div className="photo-frame"><img src={mediaAssets.find((asset) => asset.id === part.imageAssetId)?.src ?? heroImage} alt={`${productName} 대표 상품`} className="hero-photo" style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }} /></div>
+                      <div className="photo-frame"><img src={assignedAsset?.src ?? heroImage} alt={`${productName} 대표 상품`} className="hero-photo" style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }} /></div>
                       <div className="hero-overlay"><span className="eyebrow">{copyOf(part, "kicker")}</span><h1>{part.title}</h1><p>{part.body}</p><div className="hero-meta"><span>{copyOf(part, "metaOrigin")}</span><span>{weight}</span><span>{copyOf(part, "metaCategory")}</span></div></div>
                     </>}
                     {part.id === "summary" && <div className="summary-grid"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="summary-cards">{[1, 2, 3].map((number) => <article key={number}><b>{copyOf(part, `card${number}Number`)}</b><strong>{copyOf(part, `card${number}Title`)}</strong><span>{copyOf(part, `card${number}Body`)}</span></article>)}</div></div>}
-                    {part.id === "audience" && <div className="split-part"><div><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><ul>{[1, 2, 3].map((number) => <li key={number}><Check size={16}/> {copyOf(part, `bullet${number}`)}</li>)}</ul></div><div className="peach-crop"><img src={mediaAssets.find((asset) => asset.id === part.imageAssetId)?.src ?? heroImage} alt={productName} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/></div></div>}
-                    {!["hero", "summary", "audience"].includes(part.id) && <>{part.imageAssetId && <div className="part-photo-frame"><img src={mediaAssets.find((asset) => asset.id === part.imageAssetId)?.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>{mediaAssets.find((asset) => asset.id === part.imageAssetId)?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
+                    {part.id === "audience" && <div className="split-part"><div><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><ul>{[1, 2, 3].map((number) => <li key={number}><Check size={16}/> {copyOf(part, `bullet${number}`)}</li>)}</ul></div><div className="peach-crop"><img src={assignedAsset?.src ?? heroImage} alt={productName} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/></div></div>}
+                    {!["hero", "summary", "audience"].includes(part.id) && <>{assignedAsset && <div className="part-photo-frame"><img src={assignedAsset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>{assignedAsset.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
                     {selected.id === part.id && <span className="selection-tag">선택됨</span>}
                   </section>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -716,6 +736,8 @@ export default function Studio() {
             </> : activeEditTab === "design" ? <>
               <div className="tab-intro"><Palette size={18}/><div><strong>파츠 디자인</strong><p>선택한 파츠의 구성과 페이지 전체 색감을 조정합니다.</p></div></div>
               <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options">{(["default", "split", "card"] as LayoutKey[]).map((layout, index) => <button key={layout} className={(selected.layout ?? "default") === layout ? "active" : ""} onClick={() => updateSelectedLayout(layout)}><i className={`layout-${String.fromCharCode(97 + index)}`}/><span>{layout === "default" ? "기본" : layout === "split" ? "분할" : "카드"}</span>{(selected.layout ?? "default") === layout && <Check size={13}/>}</button>)}</div></div>
+              <div className="field-group"><label>텍스트 폰트</label><div className="font-options">{(Object.keys(fontMap) as FontKey[]).map((key) => <button key={key} className={(selected.fontFamily ?? "clean") === key ? "active" : ""} onClick={() => updateSelectedTypography("fontFamily", key)} style={{fontFamily: fontMap[key].family}}><span><strong>{fontMap[key].label}</strong><small>{fontMap[key].sample}</small></span>{(selected.fontFamily ?? "clean") === key && <Check size={14}/>}</button>)}</div></div>
+              <div className="field-group"><label>폰트 크기 <span>{selected.fontScale ?? 100}%</span></label><div className="font-scale-control"><input aria-label="선택 파츠 폰트 크기" type="range" min="80" max="140" step="5" value={selected.fontScale ?? 100} onChange={(event) => updateSelectedTypography("fontScale", Number(event.target.value))}/><div><button onClick={() => updateSelectedTypography("fontScale", 90)}>작게</button><button onClick={() => updateSelectedTypography("fontScale", 100)}>기본</button><button onClick={() => updateSelectedTypography("fontScale", 120)}>크게</button></div></div><small>선택한 파츠의 제목·본문·보조 문구에 함께 적용됩니다.</small></div>
               <div className="field-group"><label>페이지 테마</label><div className="theme-options">{(Object.keys(themeMap) as ThemeKey[]).map((key) => <button key={key} className={theme === key ? "active" : ""} onClick={() => { setTheme(key); setSaved(false); }}><span>{themeMap[key].swatches.map((color) => <i key={color} style={{background: color}} />)}</span><b>{themeMap[key].label}</b>{theme === key && <Check size={14}/>}</button>)}</div></div>
             </> : <>
               <div className="tab-intro"><ImageIcon size={18}/><div><strong>사진 자동 구성</strong><p>제품 사진 4~10장을 권장합니다. 적은 사진으로도 시작할 수 있어요.</p></div></div>
@@ -732,7 +754,7 @@ export default function Studio() {
                 </article>)}
               </div>
               {selectedAsset && <div className="crop-controls"><strong>선택 파츠 이미지 맞춤</strong><label><span>세로 초점</span><input type="range" min="0" max="100" value={selected.imageFocus ?? 50} onChange={(event) => setParts((current) => current.map((part) => part.id === selected.id ? {...part, imageFocus: Number(event.target.value)} : part))}/></label><label><span>확대</span><input type="range" min="100" max="160" value={selected.imageZoom ?? 100} onChange={(event) => setParts((current) => current.map((part) => part.id === selected.id ? {...part, imageZoom: Number(event.target.value)} : part))}/></label></div>}
-              <div className="ai-scene-card"><div><Sparkles size={17}/><span><strong>없는 연출 장면은 AI로 보완</strong><small>실제 제품은 유지하고 배경·소품만 연출합니다.</small></span></div><div className="image-model-toggle"><button className={imageModel === "gpt-image-2.5-flare" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-flare")}><strong>Flare</strong><small>빠른 생성</small></button><button className={imageModel === "gpt-image-2.5-sunburst" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-sunburst")}><strong>Sunburst</strong><small>정밀 보존</small></button></div><button className="generate-scene-btn" onClick={generateMoodImage} disabled={imageGenerating || !mediaAssets.some((asset) => asset.source === "uploaded")}>{imageGenerating ? <><LoaderCircle className="spin" size={14}/> 생성 중</> : `선택 파츠에 ${imageModel === "gpt-image-2.5-flare" ? "빠르게" : "정밀하게"} 생성`}</button></div>
+              <div className="ai-scene-card"><div><Sparkles size={17}/><span><strong>제품 사진이 없어도 AI 이미지 생성</strong><small>{mediaAssets.some((asset) => asset.source === "uploaded") ? "원본 제품을 유지하고 배경·소품을 연출합니다." : "상품명과 선택 파츠의 문구를 바탕으로 새 장면을 만듭니다."}</small></span></div><div className="image-model-toggle"><button className={imageModel === "gpt-image-2.5-flare" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-flare")}><strong>Flare</strong><small>빠른 생성</small></button><button className={imageModel === "gpt-image-2.5-sunburst" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-sunburst")}><strong>Sunburst</strong><small>정밀 보존</small></button></div><button className="generate-scene-btn" onClick={generateMoodImage} disabled={imageGenerating}>{imageGenerating ? <><LoaderCircle className="spin" size={14}/> 생성 중</> : `선택 파츠에 ${imageModel === "gpt-image-2.5-flare" ? "빠르게" : "정밀하게"} 생성`}</button></div>
               <div className="image-help"><CheckCircle2 size={15}/><span>자동 배치 후에도 각 파츠에서 사진·초점·확대를 자유롭게 바꿀 수 있습니다.</span></div>
             </>}
           </div>
