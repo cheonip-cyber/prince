@@ -28,6 +28,7 @@ import {
   RefreshCcw,
   RotateCcw,
   Save,
+  Star,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -41,10 +42,11 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { getCurrentUser, saveWorkspace, sendMagicLink } from "@/lib/supabase/workspace";
 
 type ThemeKey = "seasonal" | "premium" | "natural";
-type LayoutKey = "default" | "split" | "card";
+type LayoutKey = "default" | "card" | "wide" | "split" | "collage" | "circle" | "info";
 type EditTab = "content" | "design" | "image";
 type ImageModel = "gpt-image-2.5-flare" | "gpt-image-2.5-sunburst";
 type FontKey = "clean" | "serif" | "friendly";
+type ImageRole = "gift" | "origin" | "package" | "closeup";
 type Part = {
   id: string;
   code: string;
@@ -90,6 +92,7 @@ const initialParts: Part[] = [
   { id: "options", code: "P07", label: "구성·옵션", title: "필요한 만큼 골라 담았습니다", body: "2kg 한 상자, 8~10과 내외로 구성됩니다.", visible: true, required: true },
   { id: "storage", code: "P10", label: "보관법", title: "맛있는 때를 기다려 주세요", body: "수령 후 서늘한 곳에서 후숙하고, 말랑해지면 냉장 보관해 주세요.", visible: true, required: true },
   { id: "shipping", code: "P11", label: "포장·배송", title: "흔들림은 줄이고, 정성은 더하고", body: "과일 전용 완충재로 안전하게 포장해 순차 출고합니다.", visible: true, required: true },
+  { id: "reviews", code: "P13", label: "별점·후기", title: "먼저 경험한 만족 포인트", body: "향과 식감, 포장과 구성에서 만족하기 좋은 포인트를 모았습니다.", visible: true },
   { id: "notice", code: "P12", label: "주의·FAQ", title: "구매 전 꼭 확인해 주세요", body: "신선식품 특성상 단순 변심 교환은 어렵습니다. 파손 시 수령 당일 사진과 함께 문의해 주세요.", visible: true, required: true },
 ];
 
@@ -104,6 +107,21 @@ const fontMap = {
   serif: { label: "감성적인 명조", sample: "이야기와 품격을 담아", family: '"Noto Serif KR", serif' },
   friendly: { label: "친근한 손글씨", sample: "따뜻하고 편안하게", family: '"Gowun Dodum", "Noto Sans KR", sans-serif' },
 } satisfies Record<FontKey, { label: string; sample: string; family: string }>;
+
+const layoutPresets: Array<{ key: LayoutKey; label: string }> = [
+  { key: "wide", label: "전폭" },
+  { key: "split", label: "2분할" },
+  { key: "collage", label: "콜라주" },
+  { key: "circle", label: "원형 크롭" },
+  { key: "info", label: "사진+정보표" },
+];
+
+const imageRoleMap = {
+  gift: { label: "선물 분위기", description: "리본·보자기·차분한 선물 테이블" },
+  origin: { label: "산지 배경", description: "밭·과수원·자연광 중심의 산지 장면" },
+  package: { label: "포장 연출", description: "박스 구성과 안전한 포장을 강조" },
+  closeup: { label: "제품 클로즈업", description: "색·결·신선함이 잘 보이는 근접 장면" },
+} satisfies Record<ImageRole, { label: string; description: string }>;
 
 const riskyTerms = ["최고", "유일", "1위", "항암", "면역력", "무농약", "유기농", "15브릭스"];
 const optionalParts: Part[] = [
@@ -135,6 +153,25 @@ const partCopyDefaults: Record<string, Record<string, string>> = {
     factWeightLabel: "판매 단위",
     factOriginLabel: "원산지",
     factNameLabel: "상품명",
+    composition1Name: "백도",
+    composition1Value: "8~10과 내외",
+    composition2Name: "총중량",
+    composition2Value: "2kg",
+    composition3Name: "포장",
+    composition3Value: "과일 전용 완충재",
+    compositionNote: "선택한 옵션과 생과 크기에 따라 실제 수량은 달라질 수 있습니다.",
+  },
+  reviews: {
+    kicker: "REVIEW HIGHLIGHTS",
+    review1Title: "향이 은은하고 과육이 부드러워요",
+    review1Body: "후숙 후 먹으니 과즙과 향이 더 풍부하게 느껴졌어요.",
+    review1Author: "향·식감 만족 후기",
+    review2Title: "포장이 꼼꼼해 안심됐어요",
+    review2Body: "과일이 흔들리지 않도록 정돈되어 받아보기 좋았습니다.",
+    review2Author: "포장 만족 후기",
+    review3Title: "구성과 안내가 이해하기 쉬워요",
+    review3Body: "중량과 보관 방법이 잘 정리되어 선택하기 편했습니다.",
+    review3Author: "구성 만족 후기",
   },
   notice: {
     noticeTitle: "원산지·판매단위 확인 완료",
@@ -193,6 +230,7 @@ export default function Studio() {
   const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [imageGenerating, setImageGenerating] = useState(false);
   const [imageModel, setImageModel] = useState<ImageModel>("gpt-image-2.5-flare");
+  const [imageRole, setImageRole] = useState<ImageRole>("closeup");
   const [activeView, setActiveView] = useState<"editor" | "facts">("editor");
   const [showExport, setShowExport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
@@ -229,7 +267,18 @@ export default function Studio() {
       const raw = window.localStorage.getItem("fruity-studio-v1");
       if (raw) {
         const stored = JSON.parse(raw) as Partial<Snapshot> & { snapshots?: Snapshot[] };
-        if (stored.parts?.length) setParts(stored.parts);
+        if (stored.parts?.length) {
+          const migrated: Part[] = stored.parts.map((part): Part => ({
+            ...part,
+            layout: part.layout === "default" ? "wide" : part.layout === "card" ? "info" : part.layout,
+          }));
+          if (!migrated.some((part) => part.id === "reviews")) {
+            const reviewPart = initialParts.find((part) => part.id === "reviews");
+            const noticeIndex = migrated.findIndex((part) => part.id === "notice");
+            if (reviewPart) migrated.splice(noticeIndex < 0 ? migrated.length : noticeIndex, 0, { ...reviewPart });
+          }
+          setParts(migrated);
+        }
         if (stored.productName) setProductName(stored.productName);
         if (stored.origin) setOrigin(stored.origin);
         if (stored.weight) setWeight(stored.weight);
@@ -299,6 +348,42 @@ export default function Studio() {
     }, 900);
   };
 
+  const regenerateReviews = () => {
+    const variants = [
+      [
+        ["향과 식감이 기대 이상이었어요", `${productName} 특유의 향이 은은하고 식감도 편안하게 즐기기 좋았어요.`, "향·식감 만족 후기"],
+        ["포장 상태가 깔끔해 만족했어요", "완충 포장이 단정하고 상품 상태를 확인하기 쉬워 안심됐어요.", "포장 만족 후기"],
+        ["구성과 안내가 한눈에 들어와요", `${weight} 구성과 보관 안내가 잘 정리되어 선택하기 편했습니다.`, "구성 만족 후기"],
+      ],
+      [
+        ["제철의 신선함이 잘 느껴져요", "받아본 뒤 알맞게 후숙하니 향과 과즙을 더 풍부하게 즐길 수 있었어요.", "신선도 만족 후기"],
+        ["열어보는 순간 정성이 느껴져요", "상품이 흐트러지지 않도록 꼼꼼하게 정돈된 포장이 인상적이었어요.", "배송 만족 후기"],
+        ["필요한 정보가 명확해서 좋아요", "원산지와 판매 단위, 보관 방법을 바로 확인할 수 있어 편리했어요.", "정보 만족 후기"],
+      ],
+      [
+        ["부드러운 맛을 좋아한다면 잘 맞아요", `${productName}의 특징이 잘 살아 있어 가족과 함께 즐기기 좋았어요.`, "맛 만족 후기"],
+        ["받는 사람을 생각한 구성이에요", "제품과 포장이 보기 좋게 정돈되어 있어 만족스럽게 받아봤어요.", "구성 만족 후기"],
+        ["다음에도 편하게 선택할 것 같아요", "상품 설명과 실제 구성 확인이 쉬워 다시 고르기에도 부담이 없었어요.", "재구매 기대 후기"],
+      ],
+    ];
+    const next = variants[Math.floor(Math.random() * variants.length)];
+    setGenerating(true);
+    window.setTimeout(() => {
+      setParts((current) => current.map((part) => part.id === selected.id ? {
+        ...part,
+        copy: {
+          ...part.copy,
+          review1Title: next[0][0], review1Body: next[0][1], review1Author: next[0][2],
+          review2Title: next[1][0], review2Body: next[1][1], review2Author: next[1][2],
+          review3Title: next[2][0], review3Body: next[2][1], review3Author: next[2][2],
+        },
+      } : part));
+      setGenerating(false);
+      setSaved(false);
+      flash("상품에 맞춘 후기 문구 3개를 새로 적용했습니다");
+    }, 650);
+  };
+
   const saveVersion = async (label = "수동 저장") => {
     const snapshot: Snapshot = {
       id: crypto.randomUUID(), label, savedAt: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
@@ -333,11 +418,12 @@ export default function Studio() {
       if (part.id === "hero") return { ...part, title: `${noun}, 제철의 맛을 담다`.slice(0, 22), body: `${nextOrigin}에서 준비한 ${noun}을 신선하게 보내드립니다.` };
       if (part.id === "summary") return { ...part, title: `한눈에 보는 ${noun}`, body: `산지와 구성 정보를 확인한 ${draft.category} 상품입니다.` };
       if (part.id === "options") return { ...part, body: `${nextWeight} 구성으로 준비했습니다.` };
+      if (part.id === "reviews") return { ...part, title: `${noun}, 이런 점이 만족스러워요`, body: `${noun}의 맛과 구성, 포장에서 만족하기 좋은 포인트를 모았습니다.` };
       return part;
     });
     setParts(generated); setProductName(noun); setOrigin(nextOrigin); setWeight(nextWeight); setSelectedId("hero"); setTheme("seasonal");
     setShowNewProduct(false); setActiveView("editor"); setSaved(false); setDraft({ name: "", origin: "", weight: "", category: "과일" });
-    flash("입력한 상품 정보를 바탕으로 9개 파츠를 생성했습니다");
+    flash(`입력한 상품 정보를 바탕으로 ${generated.length}개 파츠를 생성했습니다`);
   };
 
   const addPart = (partId: string) => {
@@ -463,15 +549,15 @@ export default function Studio() {
     const source = mediaAssets.find((asset) => asset.source === "uploaded");
     setImageGenerating(true);
     try {
-      const response = await fetch("/api/generate-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: source?.src, productName, theme: themeMap[theme].label, model: imageModel }) });
+      const response = await fetch("/api/generate-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: source?.src, productName, theme: themeMap[theme].label, model: imageModel, role: imageRole, partTitle: selected.title, partBody: selected.body }) });
       const result = await response.json() as { image?: string; error?: string };
       if (!response.ok || !result.image) throw new Error(result.error ?? "AI 이미지 생성에 실패했습니다");
-      const asset: MediaAsset = { id: crypto.randomUUID(), src: result.image, name: `${productName}-AI-연출.png`, role: "AI 연출", source: "ai" };
+      const asset: MediaAsset = { id: crypto.randomUUID(), src: result.image, name: `${productName}-${imageRoleMap[imageRole].label}.png`, role: imageRoleMap[imageRole].label, source: "ai" };
       setMediaAssets((current) => [...current, asset]);
       setParts((current) => current.map((part) => part.id === selected.id ? { ...part, imageAssetId: asset.id, imageFocus: 50, imageZoom: 100 } : part));
       if (selected.id === "hero") setHeroImage(asset.src);
       setSaved(false);
-      flash(`${source ? "제품 사진을 기준으로" : "상품명과 파츠 내용을 기준으로"} 이미지를 만들었습니다`);
+      flash(`${source ? "제품 사진을 기준으로" : "상품명과 파츠 내용을 기준으로"} ${imageRoleMap[imageRole].label} 이미지를 만들었습니다`);
     } catch (error) {
       flash(error instanceof Error ? error.message : "AI 이미지 생성에 실패했습니다");
     } finally { setImageGenerating(false); }
@@ -668,20 +754,25 @@ export default function Studio() {
               <div className={`detail-page theme-${theme}`} ref={previewRef}>
                 {visibleParts.map((part) => {
                   const assignedAsset = mediaAssets.find((asset) => asset.id === part.imageAssetId);
+                  const activeLayout = part.layout === "default" || !part.layout ? "wide" : part.layout === "card" ? "info" : part.layout;
+                  const galleryAssets = assignedAsset
+                    ? [assignedAsset, ...mediaAssets.filter((asset) => asset.id !== assignedAsset.id)].slice(0, 4)
+                    : mediaAssets.slice(0, 4);
                   const partStyle = {
                     "--part-font-family": fontMap[part.fontFamily ?? "clean"].family,
                     "--part-font-scale": (part.fontScale ?? 100) / 100,
                   } as CSSProperties;
                   return (
-                  <section key={part.id} className={`preview-part preview-${part.id} layout-${part.layout ?? "default"} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
+                  <section key={part.id} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
                     <div className="part-hover-actions"><button type="button" className="part-hover-hide" aria-label={`${part.label} 파츠 숨기기`} title="이 파츠 숨기기" onClick={(event) => { event.stopPropagation(); setPartVisibility(part.id, false); }}><EyeOff size={14}/><span>숨기기</span></button><button type="button" className="part-hover-delete" aria-label={`${part.label} 파츠 삭제`} title="이 파츠 삭제" onClick={(event) => { event.stopPropagation(); deletePart(part.id); }}><Trash2 size={14}/><span>삭제</span></button></div>
                     {part.id === "hero" && <>
-                      <div className="photo-frame"><img src={assignedAsset?.src ?? heroImage} alt={`${productName} 대표 상품`} className="hero-photo" style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }} /></div>
+                      <div className={`photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" && galleryAssets.length ? galleryAssets : [{ id: "hero-fallback", src: assignedAsset?.src ?? heroImage }]).map((asset) => <img key={asset.id} src={asset.src} alt={`${productName} 대표 상품`} className="hero-photo" style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }} />)}</div>
                       <div className="hero-overlay"><span className="eyebrow">{copyOf(part, "kicker")}</span><h1>{part.title}</h1><p>{part.body}</p><div className="hero-meta"><span>{copyOf(part, "metaOrigin")}</span><span>{weight}</span><span>{copyOf(part, "metaCategory")}</span></div></div>
                     </>}
                     {part.id === "summary" && <div className="summary-grid"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="summary-cards">{[1, 2, 3].map((number) => <article key={number}><b>{copyOf(part, `card${number}Number`)}</b><strong>{copyOf(part, `card${number}Title`)}</strong><span>{copyOf(part, `card${number}Body`)}</span></article>)}</div></div>}
                     {part.id === "audience" && <div className="split-part"><div><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><ul>{[1, 2, 3].map((number) => <li key={number}><Check size={16}/> {copyOf(part, `bullet${number}`)}</li>)}</ul></div><div className="peach-crop"><img src={assignedAsset?.src ?? heroImage} alt={productName} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/></div></div>}
-                    {!["hero", "summary", "audience"].includes(part.id) && <>{assignedAsset && <div className="part-photo-frame"><img src={assignedAsset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>{assignedAsset.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
+                    {part.id === "reviews" && <div className="review-part"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="review-cards">{[1, 2, 3].map((number) => <article key={number}><div className="review-stars" aria-label="별점 5점">{[1, 2, 3, 4, 5].map((star) => <Star key={star} size={15} fill="currentColor"/>)}</div><strong>{copyOf(part, `review${number}Title`)}</strong><p>{copyOf(part, `review${number}Body`)}</p><small>{copyOf(part, `review${number}Author`)}</small></article>)}</div></div>}
+                    {!["hero", "summary", "audience", "reviews"].includes(part.id) && <>{(assignedAsset || (activeLayout === "collage" && galleryAssets.length > 0)) && <div className={`part-photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" ? galleryAssets : assignedAsset ? [assignedAsset] : []).map((asset) => <img key={asset.id} src={asset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>) }{assignedAsset?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <><div className="composition-grid">{[1, 2, 3].map((number) => <article key={number}><span>{number}</span><strong>{copyOf(part, `composition${number}Name`)}</strong><b>{copyOf(part, `composition${number}Value`)}</b></article>)}</div><p className="composition-note">{copyOf(part, "compositionNote")}</p><div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div></>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
                     {selected.id === part.id && <span className="selection-tag">선택됨</span>}
                   </section>
                   );
@@ -702,7 +793,7 @@ export default function Studio() {
           </div>
           <div className="edit-scroll">
             {activeEditTab === "content" ? <>
-              <div className="ai-actions"><div><Sparkles size={17}/><strong>AI 간편 수정</strong><small>이 파츠에만 적용됩니다</small></div><div className="chip-row"><button onClick={regenerate}>더 고급스럽게</button><button onClick={regenerate}>더 간결하게</button><button onClick={regenerate}>정보 중심으로</button></div><button className="regenerate-btn" onClick={regenerate} disabled={generating}>{generating ? <LoaderCircle className="spin" size={16}/> : <RefreshCcw size={16}/>} 제목만 다시 생성</button></div>
+              <div className="ai-actions"><div><Sparkles size={17}/><strong>AI 간편 수정</strong><small>이 파츠에만 적용됩니다</small></div>{selected.id !== "reviews" && <div className="chip-row"><button onClick={regenerate}>더 고급스럽게</button><button onClick={regenerate}>더 간결하게</button><button onClick={regenerate}>정보 중심으로</button></div>}<button className="regenerate-btn" onClick={selected.id === "reviews" ? regenerateReviews : regenerate} disabled={generating}>{generating ? <LoaderCircle className="spin" size={16}/> : <RefreshCcw size={16}/>} {selected.id === "reviews" ? "후기 문구 3개 다시 생성" : "제목만 다시 생성"}</button></div>
               <div className="field-group"><label>제목 <span>{selected.title.length}/22</span></label><textarea value={selected.title} onChange={(e) => updateSelected("title", e.target.value)} rows={2}/></div>
               <div className="field-group"><label>본문 <span>{selected.body.length}/120</span></label><textarea value={selected.body} onChange={(e) => updateSelected("body", e.target.value)} rows={5}/><small><CheckCircle2 size={13}/> 확인된 상품 사실과 연결됨</small></div>
               <div className="microcopy-heading"><strong>화면의 나머지 문구</strong><small>이 파츠에 보이는 작은 문구까지 모두 수정할 수 있습니다.</small></div>
@@ -721,6 +812,8 @@ export default function Studio() {
               </div>}
               {selected.id === "audience" && <div className="copy-card-editor"><fieldset><legend>추천 문구</legend>{[1, 2, 3].map((number) => <CopyField key={number} label={`추천 항목 ${number}`} value={copyOf(selected, `bullet${number}`)} onChange={(value) => updateSelectedCopy(`bullet${number}`, value)}/>)}</fieldset></div>}
               {selected.id === "options" && <>
+                <div className="copy-card-editor">{[1, 2, 3].map((number) => <fieldset key={number}><legend>구성 카드 {number}</legend><CopyField label="구성명" value={copyOf(selected, `composition${number}Name`)} onChange={(value) => updateSelectedCopy(`composition${number}Name`, value)}/><CopyField label="수량·포함 내용" value={copyOf(selected, `composition${number}Value`)} onChange={(value) => updateSelectedCopy(`composition${number}Value`, value)}/></fieldset>)}</div>
+                <CopyField label="구성 안내 문구" value={copyOf(selected, "compositionNote")} onChange={(value) => updateSelectedCopy("compositionNote", value)} multiline/>
                 <CopyField label="표 라벨 · 판매 단위" value={copyOf(selected, "factWeightLabel")} onChange={(value) => updateSelectedCopy("factWeightLabel", value)}/>
                 <CopyField label="표 라벨 · 원산지" value={copyOf(selected, "factOriginLabel")} onChange={(value) => updateSelectedCopy("factOriginLabel", value)}/>
                 <CopyField label="표 라벨 · 상품명" value={copyOf(selected, "factNameLabel")} onChange={(value) => updateSelectedCopy("factNameLabel", value)}/>
@@ -728,14 +821,15 @@ export default function Studio() {
                 <CopyField label="원산지 값" value={origin} onChange={(value) => updateLinkedFact("origin", value)} linked/>
                 <CopyField label="상품명 값" value={productName} onChange={(value) => updateLinkedFact("productName", value)} linked/>
               </>}
+              {selected.id === "reviews" && <div className="copy-card-editor">{[1, 2, 3].map((number) => <fieldset key={number}><legend>후기 카드 {number}</legend><CopyField label="후기 제목" value={copyOf(selected, `review${number}Title`)} onChange={(value) => updateSelectedCopy(`review${number}Title`, value)}/><CopyField label="후기 내용" value={copyOf(selected, `review${number}Body`)} onChange={(value) => updateSelectedCopy(`review${number}Body`, value)} multiline/><CopyField label="후기 태그" value={copyOf(selected, `review${number}Author`)} onChange={(value) => updateSelectedCopy(`review${number}Author`, value)}/></fieldset>)}</div>}
               {selected.id === "notice" && <>
                 <CopyField label="확인 박스 제목" value={copyOf(selected, "noticeTitle")} onChange={(value) => updateSelectedCopy("noticeTitle", value)}/>
                 <CopyField label="확인 박스 설명" value={copyOf(selected, "noticeBody")} onChange={(value) => updateSelectedCopy("noticeBody", value)} multiline/>
               </>}
-              {!["hero", "summary", "audience"].includes(selected.id) && <CopyField label="AI 이미지 배지" value={copyOf(selected, "imageBadge", "AI 연출 이미지")} onChange={(value) => updateSelectedCopy("imageBadge", value)}/>}
+              {!["hero", "summary", "audience", "reviews"].includes(selected.id) && <CopyField label="AI 이미지 배지" value={copyOf(selected, "imageBadge", "AI 연출 이미지")} onChange={(value) => updateSelectedCopy("imageBadge", value)}/>}
             </> : activeEditTab === "design" ? <>
               <div className="tab-intro"><Palette size={18}/><div><strong>파츠 디자인</strong><p>선택한 파츠의 구성과 페이지 전체 색감을 조정합니다.</p></div></div>
-              <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options">{(["default", "split", "card"] as LayoutKey[]).map((layout, index) => <button key={layout} className={(selected.layout ?? "default") === layout ? "active" : ""} onClick={() => updateSelectedLayout(layout)}><i className={`layout-${String.fromCharCode(97 + index)}`}/><span>{layout === "default" ? "기본" : layout === "split" ? "분할" : "카드"}</span>{(selected.layout ?? "default") === layout && <Check size={13}/>}</button>)}</div></div>
+              <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options layout-options-five">{layoutPresets.map(({key, label}) => { const currentLayout = selected.layout === "default" || !selected.layout ? "wide" : selected.layout === "card" ? "info" : selected.layout; return <button key={key} className={currentLayout === key ? "active" : ""} onClick={() => updateSelectedLayout(key)}><i className={`layout-preview-${key}`}/><span>{label}</span>{currentLayout === key && <Check size={13}/>}</button>; })}</div><small>콜라주는 업로드된 사진을 최대 4장까지 자동 조합합니다.</small></div>
               <div className="field-group"><label>텍스트 폰트</label><div className="font-options">{(Object.keys(fontMap) as FontKey[]).map((key) => <button key={key} className={(selected.fontFamily ?? "clean") === key ? "active" : ""} onClick={() => updateSelectedTypography("fontFamily", key)} style={{fontFamily: fontMap[key].family}}><span><strong>{fontMap[key].label}</strong><small>{fontMap[key].sample}</small></span>{(selected.fontFamily ?? "clean") === key && <Check size={14}/>}</button>)}</div></div>
               <div className="field-group"><label>폰트 크기 <span>{selected.fontScale ?? 100}%</span></label><div className="font-scale-control"><input aria-label="선택 파츠 폰트 크기" type="range" min="80" max="140" step="5" value={selected.fontScale ?? 100} onChange={(event) => updateSelectedTypography("fontScale", Number(event.target.value))}/><div><button onClick={() => updateSelectedTypography("fontScale", 90)}>작게</button><button onClick={() => updateSelectedTypography("fontScale", 100)}>기본</button><button onClick={() => updateSelectedTypography("fontScale", 120)}>크게</button></div></div><small>선택한 파츠의 제목·본문·보조 문구에 함께 적용됩니다.</small></div>
               <div className="field-group"><label>페이지 테마</label><div className="theme-options">{(Object.keys(themeMap) as ThemeKey[]).map((key) => <button key={key} className={theme === key ? "active" : ""} onClick={() => { setTheme(key); setSaved(false); }}><span>{themeMap[key].swatches.map((color) => <i key={color} style={{background: color}} />)}</span><b>{themeMap[key].label}</b>{theme === key && <Check size={14}/>}</button>)}</div></div>
@@ -754,7 +848,7 @@ export default function Studio() {
                 </article>)}
               </div>
               {selectedAsset && <div className="crop-controls"><strong>선택 파츠 이미지 맞춤</strong><label><span>세로 초점</span><input type="range" min="0" max="100" value={selected.imageFocus ?? 50} onChange={(event) => setParts((current) => current.map((part) => part.id === selected.id ? {...part, imageFocus: Number(event.target.value)} : part))}/></label><label><span>확대</span><input type="range" min="100" max="160" value={selected.imageZoom ?? 100} onChange={(event) => setParts((current) => current.map((part) => part.id === selected.id ? {...part, imageZoom: Number(event.target.value)} : part))}/></label></div>}
-              <div className="ai-scene-card"><div><Sparkles size={17}/><span><strong>제품 사진이 없어도 AI 이미지 생성</strong><small>{mediaAssets.some((asset) => asset.source === "uploaded") ? "원본 제품을 유지하고 배경·소품을 연출합니다." : "상품명과 선택 파츠의 문구를 바탕으로 새 장면을 만듭니다."}</small></span></div><div className="image-model-toggle"><button className={imageModel === "gpt-image-2.5-flare" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-flare")}><strong>Flare</strong><small>빠른 생성</small></button><button className={imageModel === "gpt-image-2.5-sunburst" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-sunburst")}><strong>Sunburst</strong><small>정밀 보존</small></button></div><button className="generate-scene-btn" onClick={generateMoodImage} disabled={imageGenerating}>{imageGenerating ? <><LoaderCircle className="spin" size={14}/> 생성 중</> : `선택 파츠에 ${imageModel === "gpt-image-2.5-flare" ? "빠르게" : "정밀하게"} 생성`}</button></div>
+              <div className="ai-scene-card"><div><Sparkles size={17}/><span><strong>제품 사진이 없어도 AI 이미지 생성</strong><small>{mediaAssets.some((asset) => asset.source === "uploaded") ? "원본 제품을 유지하고 선택한 역할에 맞춰 연출합니다." : "상품명과 선택 파츠의 문구를 바탕으로 새 장면을 만듭니다."}</small></span></div><div className="image-role-options">{(Object.keys(imageRoleMap) as ImageRole[]).map((role) => <button key={role} className={imageRole === role ? "active" : ""} onClick={() => setImageRole(role)}><strong>{imageRoleMap[role].label}</strong><small>{imageRoleMap[role].description}</small></button>)}</div><div className="image-model-toggle"><button className={imageModel === "gpt-image-2.5-flare" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-flare")}><strong>Flare</strong><small>빠른 생성</small></button><button className={imageModel === "gpt-image-2.5-sunburst" ? "active" : ""} onClick={() => setImageModel("gpt-image-2.5-sunburst")}><strong>Sunburst</strong><small>정밀 보존</small></button></div><button className="generate-scene-btn" onClick={generateMoodImage} disabled={imageGenerating}>{imageGenerating ? <><LoaderCircle className="spin" size={14}/> 생성 중</> : `${imageRoleMap[imageRole].label} · ${imageModel === "gpt-image-2.5-flare" ? "빠르게" : "정밀하게"} 생성`}</button></div>
               <div className="image-help"><CheckCircle2 size={15}/><span>자동 배치 후에도 각 파츠에서 사진·초점·확대를 자유롭게 바꿀 수 있습니다.</span></div>
             </>}
           </div>
@@ -763,8 +857,8 @@ export default function Studio() {
       </main>
 
       <div className={`quality-bar ${warnings.length ? "warning" : ""}`}><div><ShieldCheck size={18}/><strong>출력 전 품질 검사</strong><span>{warnings.length ? `위험 표현 ${warnings.length}건을 확인해 주세요.` : "필수 정보와 위험 표현에 이상이 없습니다."}</span></div><span className="status-pill">{warnings.length ? <><AlertTriangle size={14}/> 확인 필요</> : <><CheckCircle2 size={14}/> 출력 가능</>}</span><button onClick={() => flash(warnings.length ? `검토 필요: ${warnings.join(", ")}` : `${visibleParts.length}개 파츠 · 사실 일치 · 위험 표현 없음`)}>검사 결과 보기</button></div>
-      {showPartLibrary && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowPartLibrary(false); }}><div className="part-library-modal"><div className="modal-heading"><div><span><LayoutGrid size={18}/></span><div><strong>파츠 선택 추가</strong><small>P01~P12 중 필요한 파츠를 자유롭게 구성하세요.</small></div></div><button className="icon-btn" onClick={() => setShowPartLibrary(false)}><X size={18}/></button></div><div className="part-library-body">{allPartTemplates.map((part) => { const added = parts.some((current) => current.id === part.id); return <button key={part.id} disabled={added} onClick={() => addPart(part.id)}><span className="library-code">{part.code}</span><span><strong>{part.label}</strong><small>{part.body}</small></span><span className={added ? "added" : "add"}>{added ? <><Check size={14}/> 사용 중</> : <><Plus size={14}/> 추가</>}</span></button>; })}</div><div className="modal-footer"><span className="library-hint">삭제한 파츠도 이 목록에서 언제든 다시 추가할 수 있습니다.</span><button onClick={() => setShowPartLibrary(false)}>닫기</button></div></div></div>}
-      {showNewProduct && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowNewProduct(false); }}><div className="new-product-modal"><div className="modal-heading"><div><span><Sparkles size={18}/></span><div><strong>새 상세페이지 만들기</strong><small>상품명만으로 시작하고 나머지는 나중에 채워도 됩니다.</small></div></div><button className="icon-btn" onClick={() => setShowNewProduct(false)}><X size={18}/></button></div><div className="modal-body"><label><span>상품 유형</span><div className="type-toggle"><button className={draft.category === "과일" ? "active" : ""} onClick={() => setDraft({...draft, category:"과일"})}>과일</button><button className={draft.category === "채소" ? "active" : ""} onClick={() => setDraft({...draft, category:"채소"})}>채소</button></div></label><label><span>상품명 <b>필수</b></span><input autoFocus placeholder="예: 제주 하우스 감귤" value={draft.name} onChange={(e) => setDraft({...draft, name:e.target.value})}/></label><div className="modal-row"><label><span>원산지 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.origin} onChange={(e) => setDraft({...draft, origin:e.target.value})}/></label><label><span>판매 단위 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.weight} onChange={(e) => setDraft({...draft, weight:e.target.value})}/></label></div><label className="modal-upload"><UploadCloud size={20}/><span><strong>상품 사진은 생성 후 여러 장 추가할 수 있어요</strong><small>4~10장을 권장하지만 1장으로도 시작할 수 있습니다.</small></span></label><div className="generation-summary"><span><CheckCircle2 size={15}/> 9개 파츠 자동 구성</span><span><Sparkles size={15}/> 사진 자동 배치</span><span><Palette size={15}/> 테마 자동 적용</span></div></div><div className="modal-footer"><button onClick={() => setShowNewProduct(false)}>취소</button><button className="create-btn" onClick={createProduct}><Sparkles size={16}/> 초안 만들기 <span>상품명만으로 가능</span></button></div></div></div>}
+      {showPartLibrary && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowPartLibrary(false); }}><div className="part-library-modal"><div className="modal-heading"><div><span><LayoutGrid size={18}/></span><div><strong>파츠 선택 추가</strong><small>필요한 파츠를 자유롭게 구성하세요.</small></div></div><button className="icon-btn" onClick={() => setShowPartLibrary(false)}><X size={18}/></button></div><div className="part-library-body">{allPartTemplates.map((part) => { const added = parts.some((current) => current.id === part.id); return <button key={part.id} disabled={added} onClick={() => addPart(part.id)}><span className="library-code">{part.code}</span><span><strong>{part.label}</strong><small>{part.body}</small></span><span className={added ? "added" : "add"}>{added ? <><Check size={14}/> 사용 중</> : <><Plus size={14}/> 추가</>}</span></button>; })}</div><div className="modal-footer"><span className="library-hint">삭제한 파츠도 이 목록에서 언제든 다시 추가할 수 있습니다.</span><button onClick={() => setShowPartLibrary(false)}>닫기</button></div></div></div>}
+      {showNewProduct && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowNewProduct(false); }}><div className="new-product-modal"><div className="modal-heading"><div><span><Sparkles size={18}/></span><div><strong>새 상세페이지 만들기</strong><small>상품명만으로 시작하고 나머지는 나중에 채워도 됩니다.</small></div></div><button className="icon-btn" onClick={() => setShowNewProduct(false)}><X size={18}/></button></div><div className="modal-body"><label><span>상품 유형</span><div className="type-toggle"><button className={draft.category === "과일" ? "active" : ""} onClick={() => setDraft({...draft, category:"과일"})}>과일</button><button className={draft.category === "채소" ? "active" : ""} onClick={() => setDraft({...draft, category:"채소"})}>채소</button></div></label><label><span>상품명 <b>필수</b></span><input autoFocus placeholder="예: 제주 하우스 감귤" value={draft.name} onChange={(e) => setDraft({...draft, name:e.target.value})}/></label><div className="modal-row"><label><span>원산지 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.origin} onChange={(e) => setDraft({...draft, origin:e.target.value})}/></label><label><span>판매 단위 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.weight} onChange={(e) => setDraft({...draft, weight:e.target.value})}/></label></div><label className="modal-upload"><UploadCloud size={20}/><span><strong>상품 사진은 생성 후 여러 장 추가할 수 있어요</strong><small>4~10장을 권장하지만 1장으로도 시작할 수 있습니다.</small></span></label><div className="generation-summary"><span><CheckCircle2 size={15}/> 10개 파츠 자동 구성</span><span><Sparkles size={15}/> 사진 자동 배치</span><span><Palette size={15}/> 테마 자동 적용</span></div></div><div className="modal-footer"><button onClick={() => setShowNewProduct(false)}>취소</button><button className="create-btn" onClick={createProduct}><Sparkles size={16}/> 초안 만들기 <span>상품명만으로 가능</span></button></div></div></div>}
       {showCloudSettings && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCloudSettings(false); }}><div className="api-modal"><div className="modal-heading"><div><span><Cloud size={18}/></span><div><strong>프린스팜 클라우드</strong><small>Supabase에 상품과 버전을 안전하게 저장합니다.</small></div></div><button className="icon-btn" onClick={() => setShowCloudSettings(false)}><X size={18}/></button></div><div className="api-modal-body">{!isSupabaseConfigured ? <div className="cloud-empty"><AlertTriangle size={22}/><strong>Supabase 프로젝트 연결 대기 중</strong><p>프로젝트 URL과 Publishable Key가 설정되면 이메일 로그인을 사용할 수 있습니다.</p></div> : cloudUser ? <><div className="security-note"><CheckCircle2 size={19}/><div><strong>클라우드에 연결되었습니다.</strong><p>{cloudUser.email} 계정의 전용 데이터만 RLS로 접근합니다.</p></div></div><div className="cloud-stats"><div><small>저장 대상</small><strong>{productName}</strong></div><div><small>현재 파츠</small><strong>{parts.length}개</strong></div><div><small>보안</small><strong>RLS 적용</strong></div></div><button className="cloud-save-btn" disabled={cloudBusy} onClick={() => saveVersion("클라우드 저장")}><Cloud size={16}/>{cloudBusy ? "저장 중…" : "현재 버전 Supabase에 저장"}</button></> : magicLinkSent ? <div className="cloud-empty success"><CheckCircle2 size={24}/><strong>로그인 링크를 보냈습니다.</strong><p>{cloudEmail}의 받은편지함에서 링크를 누르면 연결이 완료됩니다.</p></div> : <><div className="security-note"><ShieldCheck size={19}/><div><strong>비밀번호 없이 안전하게 로그인합니다.</strong><p>입력한 이메일로 일회용 로그인 링크를 전송합니다.</p></div></div><label><span>이메일</span><div className="secret-input"><LogIn size={16}/><input autoFocus type="email" value={cloudEmail} onChange={(e) => setCloudEmail(e.target.value)} placeholder="name@example.com" autoComplete="email"/></div></label></>}</div><div className="modal-footer api-modal-footer">{cloudUser && <button className="danger-text" onClick={signOutCloud}><LogOut size={14}/> 로그아웃</button>}<span/><button onClick={() => setShowCloudSettings(false)}>닫기</button>{isSupabaseConfigured && !cloudUser && !magicLinkSent && <button className="create-btn" disabled={cloudBusy} onClick={requestMagicLink}><LogIn size={15}/>{cloudBusy ? "전송 중…" : "로그인 링크 받기"}</button>}</div></div></div>}
       {toast && <div className="toast"><CheckCircle2 size={18}/>{toast}</div>}
     </div>
