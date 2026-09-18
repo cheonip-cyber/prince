@@ -265,6 +265,8 @@ export default function Studio() {
   const [hydrated, setHydrated] = useState(false);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [draft, setDraft] = useState({ name: "", origin: "", weight: "", category: "과일" });
+  const [draftPhotos, setDraftPhotos] = useState<string[]>([]);
+  const [draftPhotoDragging, setDraftPhotoDragging] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const partSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const supabase = useMemo(() => createClient(), []);
@@ -448,6 +450,20 @@ export default function Studio() {
     setSelectedId(snapshot.parts[0]?.id ?? "hero"); setShowVersions(false); flash(`${snapshot.label} 버전을 복원했습니다`);
   };
 
+  const handleDraftFiles = async (fileList?: FileList | File[]) => {
+    const files = Array.from(fileList ?? []).slice(0, Math.max(0, 10 - draftPhotos.length));
+    if (!files.length) return;
+    const valid = files.filter((file) => (["image/jpeg", "image/png", "image/webp"] as string[]).includes(file.type) && file.size <= 20 * 1024 * 1024);
+    if (valid.length !== files.length) flash("JPG, PNG, WebP 형식의 20MB 이하 사진만 추가했습니다");
+    if (!valid.length) return;
+    try {
+      const sources = await Promise.all(valid.map(prepareImage));
+      setDraftPhotos((current) => [...current, ...sources]);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "사진을 처리하지 못했습니다");
+    }
+  };
+
   const createProduct = () => {
     if (!draft.name.trim()) return flash("상품명만 입력하면 바로 시작할 수 있어요");
     const noun = draft.name.trim();
@@ -460,9 +476,31 @@ export default function Studio() {
       if (part.id === "reviews") return { ...part, title: `${noun}, 이런 점이 만족스러워요`, body: `${noun}의 맛과 구성, 포장에서 만족하기 좋은 포인트를 모았습니다.` };
       return part;
     });
-    setParts(generated); setProductName(noun); setOrigin(nextOrigin); setWeight(nextWeight); setSelectedId("hero"); setTheme("seasonal");
-    setShowNewProduct(false); setActiveView("editor"); setSaved(false); setDraft({ name: "", origin: "", weight: "", category: "과일" });
-    flash(`입력한 상품 정보를 바탕으로 ${generated.length}개 파츠를 생성했습니다`);
+
+    const newAssets: MediaAsset[] = draftPhotos.map((src, index) => ({
+      id: crypto.randomUUID(), src, name: `${noun}-${index + 1}.jpg`,
+      role: photoRoles[index % photoRoles.length], source: "uploaded",
+    }));
+    const placed = newAssets.length
+      ? generated.map((part) => {
+          const position = photoPartOrder.indexOf(part.id);
+          if (position < 0) return part;
+          const asset = newAssets[position % newAssets.length];
+          return { ...part, imageAssetId: asset.id, imageFocus: 50, imageZoom: 100 };
+        })
+      : generated;
+
+    setParts(placed); setProductName(noun); setOrigin(nextOrigin); setWeight(nextWeight); setSelectedId("hero"); setTheme("seasonal");
+    if (newAssets.length) {
+      setMediaAssets((current) => [...current, ...newAssets]);
+      setHeroImage(newAssets[0].src);
+    }
+    setShowNewProduct(false); setActiveView("editor"); setSaved(false);
+    setDraft({ name: "", origin: "", weight: "", category: "과일" });
+    setDraftPhotos([]);
+    flash(newAssets.length
+      ? `입력한 상품 정보와 사진 ${newAssets.length}장으로 ${placed.length}개 파츠를 생성했습니다`
+      : `입력한 상품 정보를 바탕으로 ${generated.length}개 파츠를 생성했습니다`);
   };
 
   const addPart = (partId: string) => {
@@ -905,7 +943,8 @@ export default function Studio() {
 
       <div className={`quality-bar ${warnings.length ? "warning" : ""}`}><div><ShieldCheck size={18}/><strong>출력 전 품질 검사</strong><span>{warnings.length ? `위험 표현 ${warnings.length}건을 확인해 주세요.` : "필수 정보와 위험 표현에 이상이 없습니다."}</span></div><span className="status-pill">{warnings.length ? <><AlertTriangle size={14}/> 확인 필요</> : <><CheckCircle2 size={14}/> 출력 가능</>}</span><button onClick={() => flash(warnings.length ? `검토 필요: ${warnings.join(", ")}` : `${visibleParts.length}개 파츠 · 사실 일치 · 위험 표현 없음`)}>검사 결과 보기</button></div>
       {showPartLibrary && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowPartLibrary(false); }}><div className="part-library-modal"><div className="modal-heading"><div><span><LayoutGrid size={18}/></span><div><strong>파츠 선택 추가</strong><small>필요한 파츠를 자유롭게 구성하세요.</small></div></div><button className="icon-btn" onClick={() => setShowPartLibrary(false)}><X size={18}/></button></div><div className="part-library-body">{allPartTemplates.map((part) => { const added = parts.some((current) => current.id === part.id); return <button key={part.id} disabled={added} onClick={() => addPart(part.id)}><span className="library-code">{part.code}</span><span><strong>{part.label}</strong><small>{part.body}</small></span><span className={added ? "added" : "add"}>{added ? <><Check size={14}/> 사용 중</> : <><Plus size={14}/> 추가</>}</span></button>; })}</div><div className="modal-footer"><span className="library-hint">삭제한 파츠도 이 목록에서 언제든 다시 추가할 수 있습니다.</span><button onClick={() => setShowPartLibrary(false)}>닫기</button></div></div></div>}
-      {showNewProduct && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowNewProduct(false); }}><div className="new-product-modal"><div className="modal-heading"><div><span><Sparkles size={18}/></span><div><strong>새 상세페이지 만들기</strong><small>상품명만으로 시작하고 나머지는 나중에 채워도 됩니다.</small></div></div><button className="icon-btn" onClick={() => setShowNewProduct(false)}><X size={18}/></button></div><div className="modal-body"><label><span>상품 유형</span><div className="type-toggle"><button className={draft.category === "과일" ? "active" : ""} onClick={() => setDraft({...draft, category:"과일"})}>과일</button><button className={draft.category === "채소" ? "active" : ""} onClick={() => setDraft({...draft, category:"채소"})}>채소</button></div></label><label><span>상품명 <b>필수</b></span><input autoFocus placeholder="예: 제주 하우스 감귤" value={draft.name} onChange={(e) => setDraft({...draft, name:e.target.value})}/></label><div className="modal-row"><label><span>원산지 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.origin} onChange={(e) => setDraft({...draft, origin:e.target.value})}/></label><label><span>판매 단위 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.weight} onChange={(e) => setDraft({...draft, weight:e.target.value})}/></label></div><label className="modal-upload"><UploadCloud size={20}/><span><strong>상품 사진은 생성 후 여러 장 추가할 수 있어요</strong><small>4~10장을 권장하지만 1장으로도 시작할 수 있습니다.</small></span></label><div className="generation-summary"><span><CheckCircle2 size={15}/> 10개 파츠 자동 구성</span><span><Sparkles size={15}/> 사진 자동 배치</span><span><Palette size={15}/> 테마 자동 적용</span></div></div><div className="modal-footer"><button onClick={() => setShowNewProduct(false)}>취소</button><button className="create-btn" onClick={createProduct}><Sparkles size={16}/> 초안 만들기 <span>상품명만으로 가능</span></button></div></div></div>}
+      {showNewProduct && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowNewProduct(false); }}><div className="new-product-modal"><div className="modal-heading"><div><span><Sparkles size={18}/></span><div><strong>새 상세페이지 만들기</strong><small>상품명만으로 시작하고 나머지는 나중에 채워도 됩니다.</small></div></div><button className="icon-btn" onClick={() => setShowNewProduct(false)}><X size={18}/></button></div><div className="modal-body"><label><span>상품 유형</span><div className="type-toggle"><button className={draft.category === "과일" ? "active" : ""} onClick={() => setDraft({...draft, category:"과일"})}>과일</button><button className={draft.category === "채소" ? "active" : ""} onClick={() => setDraft({...draft, category:"채소"})}>채소</button></div></label><label><span>상품명 <b>필수</b></span><input autoFocus placeholder="예: 제주 하우스 감귤" value={draft.name} onChange={(e) => setDraft({...draft, name:e.target.value})}/></label><div className="modal-row"><label><span>원산지 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.origin} onChange={(e) => setDraft({...draft, origin:e.target.value})}/></label><label><span>판매 단위 <em>선택</em></span><input placeholder="나중에 입력 가능" value={draft.weight} onChange={(e) => setDraft({...draft, weight:e.target.value})}/></label></div><label className={`modal-upload ${draftPhotoDragging ? "dragging" : ""}`} onDragEnter={(event) => { event.preventDefault(); setDraftPhotoDragging(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDraftPhotoDragging(false); }} onDrop={(event) => { event.preventDefault(); setDraftPhotoDragging(false); handleDraftFiles(event.dataTransfer.files); }}><input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => handleDraftFiles(event.target.files ?? undefined)}/><UploadCloud size={20}/><span><strong>{draftPhotoDragging ? "여기에 놓아주세요" : draftPhotos.length ? `사진 ${draftPhotos.length}장 첨부됨` : "상품 사진을 드래그하거나 선택해 추가하세요"}</strong><small>4~10장을 권장하지만 미첨부 시 생성 후에도 추가할 수 있습니다.</small></span></label>
+              {draftPhotos.length > 0 && <div className="draft-photo-preview">{draftPhotos.map((src, index) => <img key={index} src={src} alt={`첨부 사진 ${index + 1}`}/>)}</div>}<div className="generation-summary"><span><CheckCircle2 size={15}/> 10개 파츠 자동 구성</span><span><Sparkles size={15}/> 사진 자동 배치</span><span><Palette size={15}/> 테마 자동 적용</span></div></div><div className="modal-footer"><button onClick={() => setShowNewProduct(false)}>취소</button><button className="create-btn" onClick={createProduct}><Sparkles size={16}/> 초안 만들기 <span>상품명만으로 가능</span></button></div></div></div>}
       {showCloudSettings && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCloudSettings(false); }}><div className="api-modal"><div className="modal-heading"><div><span><Cloud size={18}/></span><div><strong>프린스팜 클라우드</strong><small>Supabase에 상품과 버전을 안전하게 저장합니다.</small></div></div><button className="icon-btn" onClick={() => setShowCloudSettings(false)}><X size={18}/></button></div><div className="api-modal-body">{!isSupabaseConfigured ? <div className="cloud-empty"><AlertTriangle size={22}/><strong>Supabase 프로젝트 연결 대기 중</strong><p>프로젝트 URL과 Publishable Key가 설정되면 이메일 로그인을 사용할 수 있습니다.</p></div> : cloudUser ? <><div className="security-note"><CheckCircle2 size={19}/><div><strong>클라우드에 연결되었습니다.</strong><p>{cloudUser.email} 계정의 전용 데이터만 RLS로 접근합니다.</p></div></div><div className="cloud-stats"><div><small>저장 대상</small><strong>{productName}</strong></div><div><small>현재 파츠</small><strong>{parts.length}개</strong></div><div><small>보안</small><strong>RLS 적용</strong></div></div><button className="cloud-save-btn" disabled={cloudBusy} onClick={() => saveVersion("클라우드 저장")}><Cloud size={16}/>{cloudBusy ? "저장 중…" : "현재 버전 Supabase에 저장"}</button></> : magicLinkSent ? <div className="cloud-empty success"><CheckCircle2 size={24}/><strong>로그인 링크를 보냈습니다.</strong><p>{cloudEmail}의 받은편지함에서 링크를 누르면 연결이 완료됩니다.</p></div> : <><div className="security-note"><ShieldCheck size={19}/><div><strong>비밀번호 없이 안전하게 로그인합니다.</strong><p>입력한 이메일로 일회용 로그인 링크를 전송합니다.</p></div></div><label><span>이메일</span><div className="secret-input"><LogIn size={16}/><input autoFocus type="email" value={cloudEmail} onChange={(e) => setCloudEmail(e.target.value)} placeholder="name@example.com" autoComplete="email"/></div></label></>}</div><div className="modal-footer api-modal-footer">{cloudUser && <button className="danger-text" onClick={signOutCloud}><LogOut size={14}/> 로그아웃</button>}<span/><button onClick={() => setShowCloudSettings(false)}>닫기</button>{isSupabaseConfigured && !cloudUser && !magicLinkSent && <button className="create-btn" disabled={cloudBusy} onClick={requestMagicLink}><LogIn size={15}/>{cloudBusy ? "전송 중…" : "로그인 링크 받기"}</button>}</div></div></div>}
       {toast && <div className="toast"><CheckCircle2 size={18}/>{toast}</div>}
     </div>
@@ -969,5 +1008,6 @@ function FactsPanel({ productName, origin, weight, setProductName, setOrigin, se
   handleFiles: (files?: FileList | File[]) => void; onChange: () => void;
 }) {
   const update = (setter: (value: string) => void) => (event: ChangeEvent<HTMLInputElement>) => { setter(event.target.value); onChange(); };
-  return <div className="facts-view"><div className="facts-header"><span className="section-kicker">OPTIONAL PRODUCT INFO</span><h1>아는 정보만 가볍게 더해 주세요.</h1><p>상품명만으로 시작할 수 있고, 사용자가 입력한 내용은 초안에 그대로 반영됩니다.</p></div><div className="facts-grid"><label className="upload-card" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handleFiles(event.dataTransfer.files); }}><input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => handleFiles(event.target.files ?? undefined)}/><span><UploadCloud size={24}/></span><strong>제품 사진 여러 장 추가</strong><small>4~10장 권장 · 1장도 가능</small></label><div className="facts-form"><label><span>상품명 <b>필수</b></span><input value={productName} onChange={update(setProductName)}/><small><CheckCircle2 size={13}/> 상세페이지 전체에 자동 반영</small></label><label><span>원산지 <em>선택</em></span><input value={origin} onChange={update(setOrigin)}/><small>사용자가 입력한 내용을 그대로 사용합니다.</small></label><label><span>판매 단위 <em>선택</em></span><input value={weight} onChange={update(setWeight)}/><small><CheckCircle2 size={13}/> 모든 관련 파츠에 자동 반영</small></label></div></div><div className="fact-note"><Sparkles size={22}/><div><strong>상품 정보 입력은 선택입니다.</strong><p>먼저 초안을 만든 뒤 필요할 때 정보를 보완하고 사진 배치를 다시 실행할 수 있습니다.</p></div></div></div>;
+  const [dragging, setDragging] = useState(false);
+  return <div className="facts-view"><div className="facts-header"><span className="section-kicker">OPTIONAL PRODUCT INFO</span><h1>아는 정보만 가볍게 더해 주세요.</h1><p>상품명만으로 시작할 수 있고, 사용자가 입력한 내용은 초안에 그대로 반영됩니다.</p></div><div className="facts-grid"><label className={`upload-card ${dragging ? "dragging" : ""}`} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }} onDrop={(event) => { event.preventDefault(); setDragging(false); handleFiles(event.dataTransfer.files); }}><input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={(event) => handleFiles(event.target.files ?? undefined)}/><span><UploadCloud size={24}/></span><strong>{dragging ? "여기에 놓아주세요" : "제품 사진 여러 장 추가"}</strong><small>4~10장 권장 · 1장도 가능 · 드래그하여 추가</small></label><div className="facts-form"><label><span>상품명 <b>필수</b></span><input value={productName} onChange={update(setProductName)}/><small><CheckCircle2 size={13}/> 상세페이지 전체에 자동 반영</small></label><label><span>원산지 <em>선택</em></span><input value={origin} onChange={update(setOrigin)}/><small>사용자가 입력한 내용을 그대로 사용합니다.</small></label><label><span>판매 단위 <em>선택</em></span><input value={weight} onChange={update(setWeight)}/><small><CheckCircle2 size={13}/> 모든 관련 파츠에 자동 반영</small></label></div></div><div className="fact-note"><Sparkles size={22}/><div><strong>상품 정보 입력은 선택입니다.</strong><p>먼저 초안을 만든 뒤 필요할 때 정보를 보완하고 사진 배치를 다시 실행할 수 있습니다.</p></div></div></div>;
 }
