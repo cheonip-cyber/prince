@@ -262,7 +262,6 @@ export default function Studio() {
   const [dragOverPartId, setDragOverPartId] = useState<string | null>(null);
   const [imageDragging, setImageDragging] = useState(false);
   const [toast, setToast] = useState("");
-  const [hydrated, setHydrated] = useState(false);
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [draft, setDraft] = useState({ name: "", origin: "", weight: "", category: "과일" });
   const [draftPhotos, setDraftPhotos] = useState<string[]>([]);
@@ -280,33 +279,6 @@ export default function Studio() {
   }, [parts]);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem("fruity-studio-v1");
-      if (raw) {
-        const stored = JSON.parse(raw) as Partial<Snapshot> & { snapshots?: Snapshot[] };
-        if (stored.parts?.length) {
-          const migrated: Part[] = stored.parts.map((part): Part => ({
-            ...part,
-            layout: part.layout === "default" ? "wide" : part.layout === "card" ? "info" : part.layout,
-          }));
-          if (!migrated.some((part) => part.id === "reviews")) {
-            const reviewPart = initialParts.find((part) => part.id === "reviews");
-            const noticeIndex = migrated.findIndex((part) => part.id === "notice");
-            if (reviewPart) migrated.splice(noticeIndex < 0 ? migrated.length : noticeIndex, 0, { ...reviewPart });
-          }
-          setParts(migrated);
-        }
-        if (stored.productName) setProductName(stored.productName);
-        if (stored.origin) setOrigin(stored.origin);
-        if (stored.weight) setWeight(stored.weight);
-        if (stored.theme) setTheme(stored.theme);
-        if (stored.snapshots) setSnapshots(stored.snapshots);
-      }
-    } catch { /* damaged local data falls back to the safe sample */ }
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
     if (activeView !== "editor") return;
     partSectionRefs.current[selectedId]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [selectedId, activeView]);
@@ -317,15 +289,6 @@ export default function Studio() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setCloudUser(session?.user ?? null));
     return () => data.subscription.unsubscribe();
   }, [supabase]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    const timer = window.setTimeout(() => {
-      window.localStorage.setItem("fruity-studio-v1", JSON.stringify({ parts, productName, origin, weight, theme, snapshots }));
-      setSaved(true);
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [hydrated, parts, productName, origin, weight, theme, snapshots]);
 
   const flash = (message: string) => {
     setToast(message);
@@ -825,7 +788,7 @@ export default function Studio() {
 
         <section className="canvas-area">
           <div className="canvas-toolbar">
-            <div className="segmented"><button className={activeView === "editor" ? "active" : ""} onClick={() => setActiveView("editor")}><LayoutGrid size={15} /> 편집</button><button className={activeView === "facts" ? "active" : ""} onClick={() => setActiveView("facts")}><ShieldCheck size={15} /> 상품 사실</button></div>
+            <div className="segmented"><button className={activeView === "editor" ? "active" : ""} onClick={() => setActiveView("editor")}><LayoutGrid size={15} /> 편집</button><button className={activeView === "facts" ? "active" : ""} onClick={() => setActiveView("facts")}><ShieldCheck size={15} /> 상품 기초 정보</button></div>
             <div className="channel-select">네이버 스마트스토어 <span>860px</span><ChevronDown size={14} /></div>
             <button className="icon-btn"><MoreHorizontal size={19} /></button>
           </div>
