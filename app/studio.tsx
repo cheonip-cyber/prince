@@ -491,7 +491,7 @@ export default function Studio() {
     if (!next || parts.some((part) => part.id === next.id)) return;
     setParts((current) => {
       const noticeIndex = current.findIndex((part) => part.id === "notice");
-      const insertAt = noticeIndex < 0 ? current.length : noticeIndex;
+      const insertAt = next.id === "brand" ? Math.min(1, current.length) : noticeIndex < 0 ? current.length : noticeIndex;
       return [...current.slice(0, insertAt), { ...next }, ...current.slice(insertAt)];
     });
     setSelectedId(next.id); setActiveView("editor"); setActiveEditTab(isLockedPart(next.id) ? "design" : "content"); setShowPartLibrary(false); setSaved(false);
