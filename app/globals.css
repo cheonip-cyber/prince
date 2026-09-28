@@ -298,6 +298,10 @@ button { color:inherit; cursor:pointer; }
 .fixed-style-picker strong { font-size:11px; }
 .fixed-style-picker small { color:#87928c; font-size:8px; line-height:1.4; }
 .fixed-style-picker>button>svg { color:#397057; }
+.preview-brand { background:#fff; line-height:0; }
+.brand-image { width:100%; height:auto; display:block; }
+.brand-image-picker>button { grid-template-columns:44px 1fr auto; }
+.brand-thumb { width:44px; height:55px; object-fit:cover; border-radius:5px; border:1px solid #dde4e0; }
 .fixed-style-swatch { height:45px; padding:5px; border-radius:6px; display:flex; flex-direction:column; gap:3px; }
 .fixed-style-swatch i { display:block; height:6px; border-radius:2px; background:currentColor; opacity:.82; }
 .fixed-style-swatch i:nth-child(2) { width:72%; }

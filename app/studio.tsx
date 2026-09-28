@@ -53,6 +53,7 @@ type ImageModel = "gpt-image-2.5-flare" | "gpt-image-2.5-sunburst";
 type FontKey = "clean" | "serif" | "friendly";
 type ImageRole = "gift" | "origin" | "package" | "closeup";
 type FixedNoticeStyle = "harvest" | "clean" | "premium";
+type BrandImageKey = "story" | "orchard" | "harvest";
 type Part = {
   id: string;
   code: string;
@@ -68,6 +69,7 @@ type Part = {
   fontFamily?: FontKey;
   fontScale?: number;
   fixedNoticeStyle?: FixedNoticeStyle;
+  brandImage?: BrandImageKey;
   copy?: Record<string, string>;
 };
 
@@ -138,12 +140,19 @@ const fixedNoticeStyles = {
   premium: { label: "프리미엄 보증서형", description: "딥그린·골드 중심의 고급 안내" },
 } satisfies Record<FixedNoticeStyle, { label: string; description: string }>;
 
+const brandImages = {
+  story: { label: "브랜드 스토리", description: "슬로건·캐릭터·브랜드 박스 (과일 공통)", src: "/generated/prince-farm-brand-hero-860-v1.png", alt: "프린스팜 브랜드 스토리 — 우리가 전하는 것은 농산물이 아니라 좋은 마음입니다" },
+  orchard: { label: "과수원 캐릭터", description: "배·사과·복숭아 과수원 (프린스농원 표기)", src: "/generated/prince-farm-brand-orchard-860-v1.png", alt: "프린스농원 캐릭터 엠블럼과 과수원" },
+  harvest: { label: "채소 수확 캐릭터", description: "당근·토마토·채소 밭 (채소 상품용)", src: "/generated/prince-farm-brand-harvest-860-v1.png", alt: "프린스팜 캐릭터 엠블럼과 채소 밭" },
+} satisfies Record<BrandImageKey, { label: string; description: string; src: string; alt: string }>;
+
 const riskyTerms = ["최고", "유일", "1위", "항암", "면역력", "무농약", "유기농", "15브릭스"];
 const optionalParts: Part[] = [
   { id: "origin", code: "P05", label: "산지·선별", title: "좋은 땅에서 정성껏 골랐습니다", body: "산지에서 상태를 살펴 선별하고 신선함을 지켜 포장합니다.", visible: true },
   { id: "evidence", code: "P08", label: "품질 근거", title: "확인 가능한 정보만 담았습니다", body: "등록된 인증서나 측정 근거가 있을 때만 품질 정보로 표시합니다.", visible: true },
   { id: "usage", code: "P09", label: "섭취·활용", title: "더 맛있게 즐기는 방법", body: "깨끗이 씻어 그대로 즐기거나 차갑게 보관해 시원하게 드셔보세요.", visible: true },
   { id: "fixedNotice", code: "P14", label: "교환·반품 고정안내", title: "꼭 확인해주세요", body: "교환·반품 및 개인정보 제공 안내", visible: true, fixedNoticeStyle: "harvest" },
+  { id: "brand", code: "P15", label: "브랜드 이미지", title: "프린스팜 브랜드", body: "브랜드 이미지 선택형 파츠", visible: true, brandImage: "story" },
 ];
 const allPartTemplates = [...initialParts, ...optionalParts].sort((a, b) => a.code.localeCompare(b.code));
 
@@ -194,6 +203,10 @@ const partCopyDefaults: Record<string, Record<string, string>> = {
     noticeBody: "입력한 상품 정보를 상세페이지에 반영했습니다.",
   },
 };
+
+function isLockedPart(id: string) {
+  return id === "fixedNotice" || id === "brand";
+}
 
 function copyOf(part: Part, key: string, fallback = "") {
   return part.copy?.[key] ?? partCopyDefaults[part.id]?.[key] ?? fallback;
@@ -480,7 +493,7 @@ export default function Studio() {
       const insertAt = noticeIndex < 0 ? current.length : noticeIndex;
       return [...current.slice(0, insertAt), { ...next }, ...current.slice(insertAt)];
     });
-    setSelectedId(next.id); setActiveView("editor"); setActiveEditTab(next.id === "fixedNotice" ? "design" : "content"); setShowPartLibrary(false); setSaved(false);
+    setSelectedId(next.id); setActiveView("editor"); setActiveEditTab(isLockedPart(next.id) ? "design" : "content"); setShowPartLibrary(false); setSaved(false);
     flash(`${next.code} ${next.label} 파츠를 추가했습니다`);
   };
 
@@ -524,6 +537,11 @@ export default function Studio() {
 
   const updateSelectedTypography = (field: "fontFamily" | "fontScale", value: FontKey | number) => {
     setParts((current) => current.map((part) => part.id === selected.id ? { ...part, [field]: value } : part));
+    setSaved(false);
+  };
+
+  const updateBrandImage = (brandImage: BrandImageKey) => {
+    setParts((current) => current.map((part) => part.id === selected.id ? { ...part, brandImage } : part));
     setSaved(false);
   };
 
@@ -779,7 +797,7 @@ export default function Studio() {
                 draggable
                 aria-label={`${part.label} 파츠, 드래그하여 순서 변경`}
                 className={`part-item ${selected.id === part.id ? "active" : ""} ${!part.visible ? "hidden-part" : ""} ${draggedPartId === part.id ? "dragging" : ""} ${dragOverPartId === part.id ? "drag-over" : ""}`}
-                onClick={() => { setSelectedId(part.id); setActiveView("editor"); if (part.id === "fixedNotice") setActiveEditTab("design"); }}
+                onClick={() => { setSelectedId(part.id); setActiveView("editor"); if (isLockedPart(part.id)) setActiveEditTab("design"); }}
                 onDragStart={(event) => { setDraggedPartId(part.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", part.id); }}
                 onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDragOverPartId(part.id); }}
                 onDrop={(event) => { event.preventDefault(); const sourceId = event.dataTransfer.getData("text/plain") || draggedPartId; if (sourceId) reorderParts(sourceId, part.id); setDraggedPartId(null); setDragOverPartId(null); }}
@@ -817,6 +835,7 @@ export default function Studio() {
                   <section key={part.id} ref={(el) => { partSectionRefs.current[part.id] = el; }} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
                     <div className="part-hover-actions"><button type="button" className="part-hover-hide" aria-label={`${part.label} 파츠 숨기기`} title="이 파츠 숨기기" onClick={(event) => { event.stopPropagation(); setPartVisibility(part.id, false); }}><EyeOff size={14}/><span>숨기기</span></button><button type="button" className="part-hover-delete" aria-label={`${part.label} 파츠 삭제`} title="이 파츠 삭제" onClick={(event) => { event.stopPropagation(); deletePart(part.id); }}><Trash2 size={14}/><span>삭제</span></button></div>
                     {part.id === "fixedNotice" && <FixedNoticePart style={part.fixedNoticeStyle ?? "harvest"}/>}
+                    {part.id === "brand" && <img className="brand-image" src={brandImages[part.brandImage ?? "story"].src} alt={brandImages[part.brandImage ?? "story"].alt}/>}
                     {part.id === "hero" && <>
                       <div className={`photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" && galleryAssets.length ? galleryAssets : [{ id: "hero-fallback", src: assignedAsset?.src ?? heroImage }]).map((asset) => <img key={asset.id} src={asset.src} alt={`${productName} 대표 상품`} className="hero-photo" style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }} />)}</div>
                       <div className="hero-overlay"><span className="eyebrow">{copyOf(part, "kicker")}</span><h1>{part.title}</h1><p>{part.body}</p><div className="hero-meta"><span>{copyOf(part, "metaOrigin")}</span><span>{weight}</span><span>{copyOf(part, "metaCategory")}</span></div></div>
@@ -824,7 +843,7 @@ export default function Studio() {
                     {part.id === "summary" && <div className="summary-grid"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="summary-cards">{[1, 2, 3].map((number) => <article key={number}><b>{copyOf(part, `card${number}Number`)}</b><strong>{copyOf(part, `card${number}Title`)}</strong><span>{copyOf(part, `card${number}Body`)}</span></article>)}</div></div>}
                     {part.id === "audience" && <div className="split-part"><div><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><ul>{[1, 2, 3].map((number) => <li key={number}><Check size={16}/> {copyOf(part, `bullet${number}`)}</li>)}</ul></div><div className="peach-crop"><img src={assignedAsset?.src ?? heroImage} alt={productName} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/></div></div>}
                     {part.id === "reviews" && <div className="review-part"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="review-cards">{[1, 2, 3].map((number) => <article key={number}><div className="review-stars" aria-label="별점 5점">{[1, 2, 3, 4, 5].map((star) => <Star key={star} size={15} fill="currentColor"/>)}</div><strong>{copyOf(part, `review${number}Title`)}</strong><p>{copyOf(part, `review${number}Body`)}</p><small>{copyOf(part, `review${number}Author`)}</small></article>)}</div></div>}
-                    {!["hero", "summary", "audience", "reviews", "fixedNotice"].includes(part.id) && <>{(assignedAsset || (activeLayout === "collage" && galleryAssets.length > 0)) && <div className={`part-photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" ? galleryAssets : assignedAsset ? [assignedAsset] : []).map((asset) => <img key={asset.id} src={asset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>) }{assignedAsset?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <><div className="composition-grid">{[1, 2, 3].map((number) => <article key={number}><span>{number}</span><strong>{copyOf(part, `composition${number}Name`)}</strong><b>{copyOf(part, `composition${number}Value`)}</b></article>)}</div><p className="composition-note">{copyOf(part, "compositionNote")}</p><div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div></>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
+                    {!["hero", "summary", "audience", "reviews", "fixedNotice", "brand"].includes(part.id) && <>{(assignedAsset || (activeLayout === "collage" && galleryAssets.length > 0)) && <div className={`part-photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" ? galleryAssets : assignedAsset ? [assignedAsset] : []).map((asset) => <img key={asset.id} src={asset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>) }{assignedAsset?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <><div className="composition-grid">{[1, 2, 3].map((number) => <article key={number}><span>{number}</span><strong>{copyOf(part, `composition${number}Name`)}</strong><b>{copyOf(part, `composition${number}Value`)}</b></article>)}</div><p className="composition-note">{copyOf(part, "compositionNote")}</p><div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div></>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
                     {selected.id === part.id && <span className="selection-tag">선택됨</span>}
                   </section>
                   );
@@ -841,10 +860,10 @@ export default function Studio() {
           <div className="edit-tabs">
             <button className={activeEditTab === "content" ? "active" : ""} onClick={() => setActiveEditTab("content")}>콘텐츠</button>
             <button className={activeEditTab === "design" ? "active" : ""} onClick={() => setActiveEditTab("design")}>디자인</button>
-            <button className={activeEditTab === "image" ? "active" : ""} disabled={selected.id === "fixedNotice"} onClick={() => setActiveEditTab("image")}>이미지</button>
+            <button className={activeEditTab === "image" ? "active" : ""} disabled={isLockedPart(selected.id)} onClick={() => setActiveEditTab("image")}>이미지</button>
           </div>
           <div className="edit-scroll">
-            {activeEditTab === "content" ? selected.id === "fixedNotice" ? <div className="fixed-content-lock"><LockKeyhole size={28}/><strong>내용이 잠긴 고정 안내 파츠입니다.</strong><p>첨부 이미지의 교환·반품 안내 문구를 그대로 유지합니다. 내용 편집과 AI 재작성은 제공하지 않으며 디자인 버전만 변경할 수 있습니다.</p><button onClick={() => setActiveEditTab("design")}><Palette size={15}/> 디자인 3종 선택</button></div> : <>
+            {activeEditTab === "content" ? isLockedPart(selected.id) ? <div className="fixed-content-lock"><LockKeyhole size={28}/><strong>{selected.id === "brand" ? "이미지형 브랜드 파츠입니다." : "내용이 잠긴 고정 안내 파츠입니다."}</strong><p>{selected.id === "brand" ? "이미지에 브랜드 문구가 포함되어 있어 텍스트 편집과 AI 재작성은 제공하지 않습니다. 디자인 탭에서 3종 중 사용할 이미지를 선택하세요." : "첨부 이미지의 교환·반품 안내 문구를 그대로 유지합니다. 내용 편집과 AI 재작성은 제공하지 않으며 디자인 버전만 변경할 수 있습니다."}</p><button onClick={() => setActiveEditTab("design")}><Palette size={15}/> {selected.id === "brand" ? "브랜드 이미지 선택" : "디자인 3종 선택"}</button></div> : <>
               <div className="ai-actions"><div><Sparkles size={17}/><strong>AI 간편 수정</strong><small>이 파츠에만 적용됩니다</small></div>{selected.id !== "reviews" && <div className="chip-row"><button onClick={() => regenerate("luxury")} disabled={generating}>더 고급스럽게</button><button onClick={() => regenerate("concise")} disabled={generating}>더 간결하게</button><button onClick={() => regenerate("factual")} disabled={generating}>정보 중심으로</button></div>}<button className="regenerate-btn" onClick={() => (selected.id === "reviews" ? regenerateReviews() : regenerate())} disabled={generating}>{generating ? <LoaderCircle className="spin" size={16}/> : <RefreshCcw size={16}/>} {selected.id === "reviews" ? "후기 문구 3개 다시 생성" : "제목만 다시 생성"}</button></div>
               <div className="field-group"><label>제목 <span>{selected.title.length}/22</span></label><textarea value={selected.title} onChange={(e) => updateSelected("title", e.target.value)} rows={2}/></div>
               <div className="field-group"><label>본문 <span>{selected.body.length}/120</span></label><textarea value={selected.body} onChange={(e) => updateSelected("body", e.target.value)} rows={5}/><small><CheckCircle2 size={13}/> 확인된 상품 사실과 연결됨</small></div>
@@ -881,7 +900,7 @@ export default function Studio() {
               {!["hero", "summary", "audience", "reviews"].includes(selected.id) && <CopyField label="AI 이미지 배지" value={copyOf(selected, "imageBadge", "AI 연출 이미지")} onChange={(value) => updateSelectedCopy("imageBadge", value)}/>}
             </> : activeEditTab === "design" ? <>
               <div className="tab-intro"><Palette size={18}/><div><strong>파츠 디자인</strong><p>선택한 파츠의 구성과 페이지 전체 색감을 조정합니다.</p></div></div>
-              {selected.id === "fixedNotice" ? <div className="field-group fixed-style-picker"><label>고정 안내 디자인</label>{(Object.keys(fixedNoticeStyles) as FixedNoticeStyle[]).map((key) => <button key={key} className={(selected.fixedNoticeStyle ?? "harvest") === key ? "active" : ""} onClick={() => updateFixedNoticeStyle(key)}><span className={`fixed-style-swatch swatch-${key}`}><i/><i/><i/></span><span><strong>{fixedNoticeStyles[key].label}</strong><small>{fixedNoticeStyles[key].description}</small></span>{(selected.fixedNoticeStyle ?? "harvest") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>디자인을 바꿔도 안내 문구와 고객센터 정보는 변경되지 않습니다.</span></div></div> : <>
+              {selected.id === "brand" ? <div className="field-group fixed-style-picker brand-image-picker"><label>브랜드 이미지 선택</label>{(Object.keys(brandImages) as BrandImageKey[]).map((key) => <button key={key} className={(selected.brandImage ?? "story") === key ? "active" : ""} onClick={() => updateBrandImage(key)}><img src={brandImages[key].src} alt="" className="brand-thumb"/><span><strong>{brandImages[key].label}</strong><small>{brandImages[key].description}</small></span>{(selected.brandImage ?? "story") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>이미지 안의 문구는 변경되지 않습니다. 상품 종류와 브랜드 표기에 맞는 이미지를 선택하세요.</span></div></div> : selected.id === "fixedNotice" ? <div className="field-group fixed-style-picker"><label>고정 안내 디자인</label>{(Object.keys(fixedNoticeStyles) as FixedNoticeStyle[]).map((key) => <button key={key} className={(selected.fixedNoticeStyle ?? "harvest") === key ? "active" : ""} onClick={() => updateFixedNoticeStyle(key)}><span className={`fixed-style-swatch swatch-${key}`}><i/><i/><i/></span><span><strong>{fixedNoticeStyles[key].label}</strong><small>{fixedNoticeStyles[key].description}</small></span>{(selected.fixedNoticeStyle ?? "harvest") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>디자인을 바꿔도 안내 문구와 고객센터 정보는 변경되지 않습니다.</span></div></div> : <>
                 <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options layout-options-five">{layoutPresets.map(({key, label}) => { const currentLayout = selected.layout === "default" || !selected.layout ? "wide" : selected.layout === "card" ? "info" : selected.layout; return <button key={key} className={currentLayout === key ? "active" : ""} onClick={() => updateSelectedLayout(key)}><i className={`layout-preview-${key}`}/><span>{label}</span>{currentLayout === key && <Check size={13}/>}</button>; })}</div><small>콜라주는 업로드된 사진을 최대 4장까지 자동 조합합니다.</small></div>
                 <div className="field-group"><label>텍스트 폰트</label><div className="font-options">{(Object.keys(fontMap) as FontKey[]).map((key) => <button key={key} className={(selected.fontFamily ?? "clean") === key ? "active" : ""} onClick={() => updateSelectedTypography("fontFamily", key)} style={{fontFamily: fontMap[key].family}}><span><strong>{fontMap[key].label}</strong><small>{fontMap[key].sample}</small></span>{(selected.fontFamily ?? "clean") === key && <Check size={14}/>}</button>)}</div></div>
                 <div className="field-group"><label>폰트 크기 <span>{selected.fontScale ?? 100}%</span></label><div className="font-scale-control"><input aria-label="선택 파츠 폰트 크기" type="range" min="80" max="140" step="5" value={selected.fontScale ?? 100} onChange={(event) => updateSelectedTypography("fontScale", Number(event.target.value))}/><div><button onClick={() => updateSelectedTypography("fontScale", 90)}>작게</button><button onClick={() => updateSelectedTypography("fontScale", 100)}>기본</button><button onClick={() => updateSelectedTypography("fontScale", 120)}>크게</button></div></div><small>선택한 파츠의 제목·본문·보조 문구에 함께 적용됩니다.</small></div>
