@@ -53,7 +53,7 @@ type ImageModel = "gpt-image-2.5-flare" | "gpt-image-2.5-sunburst";
 type FontKey = "clean" | "serif" | "friendly";
 type ImageRole = "gift" | "origin" | "package" | "closeup";
 type FixedNoticeStyle = "harvest" | "clean" | "premium";
-type BrandImageKey = "story" | "orchard" | "harvest";
+type BrandImageKey = "story" | "collage" | "orchard" | "harvest";
 type Part = {
   id: string;
   code: string;
@@ -141,7 +141,8 @@ const fixedNoticeStyles = {
 } satisfies Record<FixedNoticeStyle, { label: string; description: string }>;
 
 const brandImages = {
-  story: { label: "브랜드 스토리", description: "슬로건·캐릭터·브랜드 박스 (과일 공통)", src: "/generated/prince-farm-brand-hero-860-v1.png", alt: "프린스팜 브랜드 스토리 — 우리가 전하는 것은 농산물이 아니라 좋은 마음입니다" },
+  story: { label: "브랜드 스토리 A", description: "슬로건·캐릭터·브랜드 박스 (과일 공통)", src: "/generated/prince-farm-brand-hero-860-v1-character-v2.png", alt: "프린스팜 브랜드 스토리 — 우리가 전하는 것은 농산물이 아니라 좋은 마음입니다" },
+  collage: { label: "브랜드 스토리 B", description: "캐릭터·수확·선물 테이블 콜라주", src: "/generated/prince-farm-brand-hero-860-v2-character-v2.png", alt: "프린스팜 브랜드 스토리 — 좋은 사람에게 가장 먼저" },
   orchard: { label: "과수원 캐릭터", description: "배·사과·복숭아 과수원 (프린스농원 표기)", src: "/generated/prince-farm-brand-orchard-860-v1.png", alt: "프린스농원 캐릭터 엠블럼과 과수원" },
   harvest: { label: "채소 수확 캐릭터", description: "당근·토마토·채소 밭 (채소 상품용)", src: "/generated/prince-farm-brand-harvest-860-v1.png", alt: "프린스팜 캐릭터 엠블럼과 채소 밭" },
 } satisfies Record<BrandImageKey, { label: string; description: string; src: string; alt: string }>;
