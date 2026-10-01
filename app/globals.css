@@ -438,4 +438,4 @@ button { color:inherit; cursor:pointer; }
 .summary-grid>p,
 .standard-part>p:not(.composition-note),
 .split-part p,
-.review-part>p { font-size:1.3125em; line-height:2.5; }
+.review-part>p { font-size:1.3125em; line-height:var(--part-line-height,2.5); }

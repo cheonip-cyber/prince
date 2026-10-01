@@ -68,6 +68,7 @@ type Part = {
   imageZoom?: number;
   fontFamily?: FontKey;
   fontScale?: number;
+  lineHeight?: number;
   fixedNoticeStyle?: FixedNoticeStyle;
   brandImage?: BrandImageKey;
   copy?: Record<string, string>;
@@ -536,7 +537,7 @@ export default function Studio() {
     setSaved(false);
   };
 
-  const updateSelectedTypography = (field: "fontFamily" | "fontScale", value: FontKey | number) => {
+  const updateSelectedTypography = (field: "fontFamily" | "fontScale" | "lineHeight", value: FontKey | number) => {
     setParts((current) => current.map((part) => part.id === selected.id ? { ...part, [field]: value } : part));
     setSaved(false);
   };
@@ -831,6 +832,7 @@ export default function Studio() {
                   const partStyle = {
                     "--part-font-family": fontMap[part.fontFamily ?? "clean"].family,
                     "--part-font-scale": (part.fontScale ?? 100) / 100,
+                    "--part-line-height": part.lineHeight ?? 2.5,
                   } as CSSProperties;
                   return (
                   <section key={part.id} ref={(el) => { partSectionRefs.current[part.id] = el; }} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
@@ -905,6 +907,7 @@ export default function Studio() {
                 <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options layout-options-five">{layoutPresets.map(({key, label}) => { const currentLayout = selected.layout === "default" || !selected.layout ? "wide" : selected.layout === "card" ? "info" : selected.layout; return <button key={key} className={currentLayout === key ? "active" : ""} onClick={() => updateSelectedLayout(key)}><i className={`layout-preview-${key}`}/><span>{label}</span>{currentLayout === key && <Check size={13}/>}</button>; })}</div><small>콜라주는 업로드된 사진을 최대 4장까지 자동 조합합니다.</small></div>
                 <div className="field-group"><label>텍스트 폰트</label><div className="font-options">{(Object.keys(fontMap) as FontKey[]).map((key) => <button key={key} className={(selected.fontFamily ?? "clean") === key ? "active" : ""} onClick={() => updateSelectedTypography("fontFamily", key)} style={{fontFamily: fontMap[key].family}}><span><strong>{fontMap[key].label}</strong><small>{fontMap[key].sample}</small></span>{(selected.fontFamily ?? "clean") === key && <Check size={14}/>}</button>)}</div></div>
                 <div className="field-group"><label>폰트 크기 <span>{selected.fontScale ?? 100}%</span></label><div className="font-scale-control"><input aria-label="선택 파츠 폰트 크기" type="range" min="80" max="140" step="5" value={selected.fontScale ?? 100} onChange={(event) => updateSelectedTypography("fontScale", Number(event.target.value))}/><div><button onClick={() => updateSelectedTypography("fontScale", 90)}>작게</button><button onClick={() => updateSelectedTypography("fontScale", 100)}>기본</button><button onClick={() => updateSelectedTypography("fontScale", 120)}>크게</button></div></div><small>선택한 파츠의 제목·본문·보조 문구에 함께 적용됩니다.</small></div>
+                <div className="field-group"><label>본문 줄간격 <span>{(selected.lineHeight ?? 2.5).toFixed(1)}</span></label><div className="font-scale-control"><input aria-label="선택 파츠 본문 줄간격" type="range" min="1.2" max="3.5" step="0.1" value={selected.lineHeight ?? 2.5} onChange={(event) => updateSelectedTypography("lineHeight", Number(event.target.value))}/><div><button onClick={() => updateSelectedTypography("lineHeight", 1.8)}>좁게</button><button onClick={() => updateSelectedTypography("lineHeight", 2.5)}>기본</button><button onClick={() => updateSelectedTypography("lineHeight", 3)}>넓게</button></div></div><small>선택한 파츠의 본문 문단에 적용됩니다.</small></div>
                 <div className="field-group"><label>페이지 테마</label><div className="theme-options">{(Object.keys(themeMap) as ThemeKey[]).map((key) => <button key={key} className={theme === key ? "active" : ""} onClick={() => { setTheme(key); setSaved(false); }}><span>{themeMap[key].swatches.map((color) => <i key={color} style={{background: color}} />)}</span><b>{themeMap[key].label}</b>{theme === key && <Check size={14}/>}</button>)}</div></div>
               </>}
             </> : <>
