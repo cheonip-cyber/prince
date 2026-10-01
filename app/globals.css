@@ -92,7 +92,7 @@ button { color:inherit; cursor:pointer; }
 .summary-cards article { min-height:168px; padding:24px 12px; background:#fff; border:1px solid color-mix(in srgb,var(--page-accent) 17%,white); border-radius:84px 84px 14px 14px; display:flex; flex-direction:column; align-items:center; }
 .summary-cards b { color:var(--page-accent); font-family:inherit; font-size:.625em; font-weight:600; }
 .summary-cards strong { margin:21px 0 10px; font-size:1em; color:var(--page-primary); }
-.summary-cards span { font-size:.6875em; line-height:1.75; color:#858b87; white-space:pre-line; }
+.summary-cards span { font-size:1em; line-height:1.75; color:#858b87; white-space:pre-line; }
 .split-part { display:grid; grid-template-columns:1.1fr .9fr; min-height:350px; background:#fff; }
 .split-part>div:first-child { padding:68px 30px 55px 48px; }
 .split-part ul { list-style:none; padding:0; margin:26px 0 0; display:flex; flex-direction:column; gap:12px; }
@@ -168,7 +168,7 @@ button { color:inherit; cursor:pointer; }
 .review-cards article { min-height:220px; padding:25px 21px; border:1px solid #e9e5dd; border-radius:16px; background:linear-gradient(145deg,#fff,#fbf7ef); display:flex; flex-direction:column; }
 .review-stars { display:flex; gap:2px; margin-bottom:20px; color:#e69a38; }
 .review-cards strong { min-height:2.8em; color:var(--page-primary); font-size:.875em; line-height:1.45; white-space:pre-line; }
-.review-cards p { margin:11px 0 18px; color:#727b75; font-size:.6875em; line-height:1.75; white-space:pre-line; }
+.review-cards p { margin:11px 0 18px; color:#727b75; font-size:1em; line-height:1.75; white-space:pre-line; }
 .review-cards small { margin-top:auto; color:#9a8f81; font-size:.625em; font-weight:700; }
 .preview-fixedNotice { background:#eef2ef; padding:24px; }
 .fixed-notice { --fixed-bg:#fff7df; --fixed-paper:#fffdf7; --fixed-ink:#28281f; --fixed-primary:#e65b20; --fixed-secondary:#4d8a4a; --fixed-line:#d8bb7d; position:relative; min-height:1230px; padding:48px 42px 44px; overflow:hidden; border:3px solid var(--fixed-line); background:var(--fixed-bg); color:var(--fixed-ink); font-family:"Noto Sans KR",sans-serif; font-size:16px; }
@@ -433,12 +433,9 @@ button { color:inherit; cursor:pointer; }
   .facts-view { padding-left:25px; padding-right:25px; }
 }
 
-/* ===== 본문 가독성: 글자 150%, 줄간격 3.0 ===== */
+/* ===== 본문 가독성: 글자 150%, 줄간격 2.5 ===== */
 .hero-overlay p,
 .summary-grid>p,
 .standard-part>p:not(.composition-note),
 .split-part p,
-.review-part>p { font-size:1.3125em; line-height:3; }
-
-/* ===== 파츠 구분: 상단 강조선 (고정 안내·브랜드 이미지 파츠 제외) ===== */
-.preview-part:not(.preview-brand):not(.preview-fixedNotice)::before { content:""; position:absolute; top:0; left:0; right:0; height:4px; background:var(--page-accent); z-index:3; pointer-events:none; }
+.review-part>p { font-size:1.3125em; line-height:2.5; }
