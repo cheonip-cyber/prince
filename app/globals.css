@@ -439,3 +439,29 @@ button { color:inherit; cursor:pointer; }
 .standard-part>p:not(.composition-note),
 .split-part p,
 .review-part>p { font-size:1.3125em; line-height:var(--part-line-height,2.5); }
+
+/* ===== 상세페이지 최소 글자 크기 16px (편집 UI 제외) ===== */
+.preview-part { font-size:max(16px, calc(16px * var(--part-font-scale,1))); }
+.eyebrow,.section-kicker,
+.hero-meta span,
+.summary-cards b,
+.split-part li,
+.part-photo-frame>span,
+.option-card small,
+.option-card strong,
+.notice-box,
+.notice-box small,
+.composition-grid article>span,
+.composition-grid strong,
+.composition-grid b,
+.standard-part>.composition-note,
+.review-cards strong,
+.review-cards small { font-size:1em; }
+.fixed-notice-intro,
+.fixed-notice-deadline,
+.fixed-policy-row p,
+.fixed-notice-alert,
+.fixed-step-grid p,
+.fixed-privacy-section li,
+.fixed-notice footer { font-size:16px; }
+
