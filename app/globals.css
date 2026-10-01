@@ -433,12 +433,12 @@ button { color:inherit; cursor:pointer; }
   .facts-view { padding-left:25px; padding-right:25px; }
 }
 
-/* ===== 본문 가독성: 글자 150%, 줄간격 2.5 ===== */
+/* ===== 본문 가독성: 글자 150%, 줄간격 2.0 ===== */
 .hero-overlay p,
 .summary-grid>p,
 .standard-part>p:not(.composition-note),
 .split-part p,
-.review-part>p { font-size:1.3125em; line-height:var(--part-line-height,2.5); }
+.review-part>p { font-size:1.3125em; line-height:var(--part-line-height,2); }
 
 /* ===== 상세페이지 최소 글자 크기 16px (편집 UI 제외) ===== */
 .preview-part { font-size:max(16px, calc(16px * var(--part-font-scale,1))); }
