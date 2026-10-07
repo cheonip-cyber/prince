@@ -41,7 +41,7 @@ import {
   X,
 } from "lucide-react";
 import { toPng } from "html-to-image";
-import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { clearRemoteProductLink, getCurrentUser, saveWorkspace, sendMagicLink } from "@/lib/supabase/workspace";
@@ -54,6 +54,12 @@ type FontKey = "clean" | "serif" | "friendly";
 type ImageRole = "gift" | "origin" | "package" | "closeup";
 type FixedNoticeStyle = "harvest" | "clean" | "premium";
 type SummaryStyle = "cards" | "list" | "number" | "band";
+
+const EXPORT_WIDTH = 860;
+const FIT_HEIGHT = 1100;
+const FIT_RATIO = FIT_HEIGHT / EXPORT_WIDTH;
+const MIN_HEIGHT_RATIO = 0.3;
+const MAX_HEIGHT_RATIO = 3.5;
 type BrandImageKey = "story" | "collage" | "orchard" | "harvest";
 type Part = {
   id: string;
@@ -72,6 +78,7 @@ type Part = {
   lineHeight?: number;
   fixedNoticeStyle?: FixedNoticeStyle;
   summaryStyle?: SummaryStyle;
+  heightRatio?: number;
   brandImage?: BrandImageKey;
   copy?: Record<string, string>;
 };
@@ -275,6 +282,7 @@ function downloadText(name: string, content: string, type: string) {
 export default function Studio() {
   const [parts, setParts] = useState(initialParts);
   const [selectedId, setSelectedId] = useState("hero");
+  const [resizingId, setResizingId] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeKey>("seasonal");
   const [productName, setProductName] = useState("햇살담은 영천 백도");
   const [origin, setOrigin] = useState("경상북도 영천시");
@@ -572,6 +580,42 @@ export default function Studio() {
     setSaved(false);
   };
 
+  const setPartHeightRatio = (id: string, ratio: number | undefined) => {
+    const next = ratio === undefined ? undefined : Math.round(Math.min(MAX_HEIGHT_RATIO, Math.max(MIN_HEIGHT_RATIO, ratio)) * 1000) / 1000;
+    setParts((current) => current.map((part) => part.id === id ? { ...part, heightRatio: next } : part));
+    setSaved(false);
+  };
+
+  const startPartResize = (event: ReactPointerEvent<HTMLElement>, part: Part) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const section = (event.currentTarget as HTMLElement).closest(".preview-part") as HTMLElement | null;
+    if (!section) return;
+    const width = section.getBoundingClientRect().width;
+    const startY = event.clientY;
+    const startHeight = section.getBoundingClientRect().height;
+    setSelectedId(part.id);
+    setResizingId(part.id);
+    const move = (moveEvent: PointerEvent) => {
+      let ratio = (startHeight + moveEvent.clientY - startY) / width;
+      if (Math.abs(ratio * EXPORT_WIDTH - FIT_HEIGHT) < 14) ratio = FIT_RATIO;
+      setPartHeightRatio(part.id, ratio);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      setResizingId(null);
+      requestAnimationFrame(() => {
+        const rect = section.getBoundingClientRect();
+        setParts((current) => current.map((item) => item.id === part.id && item.heightRatio !== undefined && rect.height / rect.width > item.heightRatio + 0.002 ? { ...item, heightRatio: Math.round((rect.height / rect.width) * 1000) / 1000 } : item));
+      });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+
   const updateSummaryStyle = (summaryStyle: SummaryStyle) => {
     setParts((current) => current.map((part) => part.id === selected.id ? { ...part, summaryStyle } : part));
     setSaved(false);
@@ -697,6 +741,7 @@ export default function Studio() {
     });
     clone.querySelectorAll(".selection-tag").forEach((element) => element.remove());
     clone.querySelectorAll(".part-hover-actions").forEach((element) => element.remove());
+    clone.querySelectorAll(".part-resize-handle").forEach((element) => element.remove());
     clone.querySelectorAll(".part-hover-delete").forEach((element) => element.remove());
     clone.querySelectorAll(".selected-part").forEach((element) => element.classList.remove("selected-part"));
     host.appendChild(clone);
@@ -781,7 +826,7 @@ export default function Studio() {
         html,body{margin:0;min-height:100%;background:#fff}
         body{display:flex;justify-content:center;overflow-x:hidden}
         .detail-page{width:min(860px,100%)!important;max-width:none!important;margin:0 auto!important;box-shadow:none!important}
-        .selection-tag{display:none!important}
+        .selection-tag,.part-resize-handle{display:none!important}
         .selected-part{outline:none!important}
         @media(max-width:860px){.detail-page{width:100%!important}}
       `;
@@ -863,9 +908,10 @@ export default function Studio() {
                     "--part-font-family": fontMap[part.fontFamily ?? "clean"].family,
                     "--part-font-scale": (part.fontScale ?? 100) / 100,
                     "--part-line-height": part.lineHeight ?? 2,
+                    ...(part.heightRatio ? { "--part-h": Math.round(part.heightRatio * EXPORT_WIDTH) } : {}),
                   } as CSSProperties;
                   return (
-                  <section key={part.id} ref={(el) => { partSectionRefs.current[part.id] = el; }} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
+                  <section key={part.id} ref={(el) => { partSectionRefs.current[part.id] = el; }} className={`preview-part preview-${part.id} layout-${activeLayout} ${assignedAsset ? "has-part-image" : ""} ${part.heightRatio ? "fit-height" : ""} ${selected.id === part.id ? "selected-part" : ""}`} style={partStyle} onClick={() => setSelectedId(part.id)}>
                     <div className="part-hover-actions"><button type="button" className="part-hover-hide" aria-label={`${part.label} 파츠 숨기기`} title="이 파츠 숨기기" onClick={(event) => { event.stopPropagation(); setPartVisibility(part.id, false); }}><EyeOff size={14}/><span>숨기기</span></button><button type="button" className="part-hover-delete" aria-label={`${part.label} 파츠 삭제`} title="이 파츠 삭제" onClick={(event) => { event.stopPropagation(); deletePart(part.id); }}><Trash2 size={14}/><span>삭제</span></button></div>
                     {part.id === "fixedNotice" && <FixedNoticePart style={part.fixedNoticeStyle ?? "harvest"}/>}
                     {part.id === "announcement" && <div className="announcement-part"><h2>{part.title}</h2>{[1, 2].map((card) => <article key={card} className="announcement-card"><span className="announcement-tag">{copyOf(part, `card${card}Title`)}</span><ul className="announcement-list">{(card === 1 ? ["card1Item1", "card1Item2", "card1Note", "card1Item3"] : ["card2Item1", "card2Item2", "card2Item3", "card2Item4"]).map((key) => key === "card1Note" ? <li key={key} className="announcement-note"><span>{copyOf(part, key)}</span></li> : <li key={key}><span className="announcement-icon"><CheckCircle2 size={22}/></span><span>{copyOf(part, key)}</span></li>)}</ul></article>)}</div>}
@@ -878,6 +924,7 @@ export default function Studio() {
                     {part.id === "audience" && <div className="split-part"><div><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><ul>{[1, 2, 3].map((number) => <li key={number}><Check size={16}/> {copyOf(part, `bullet${number}`)}</li>)}</ul></div><div className="peach-crop"><img src={assignedAsset?.src ?? heroImage} alt={productName} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/></div></div>}
                     {part.id === "reviews" && <div className="review-part"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="review-cards">{[1, 2, 3].map((number) => <article key={number}><div className="review-stars" aria-label="별점 5점">{[1, 2, 3, 4, 5].map((star) => <Star key={star} size={15} fill="currentColor"/>)}</div><strong>{copyOf(part, `review${number}Title`)}</strong><p>{copyOf(part, `review${number}Body`)}</p><small>{copyOf(part, `review${number}Author`)}</small></article>)}</div></div>}
                     {!["hero", "summary", "audience", "reviews", "fixedNotice", "brand", "announcement"].includes(part.id) && <><div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <><div className="composition-grid">{[1, 2, 3].map((number) => <article key={number}><span>{number}</span><strong>{copyOf(part, `composition${number}Name`)}</strong><b>{copyOf(part, `composition${number}Value`)}</b></article>)}</div><p className="composition-note">{copyOf(part, "compositionNote")}</p><div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div></>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div>{(assignedAsset || (activeLayout === "collage" && galleryAssets.length > 0)) && <div className={`part-photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" ? galleryAssets : assignedAsset ? [assignedAsset] : []).map((asset) => <img key={asset.id} src={asset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>) }{assignedAsset?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}</>}
+                    {!isLockedPart(part.id) && <div className={`part-resize-handle ${resizingId === part.id ? "is-dragging" : ""}`} role="separator" aria-orientation="horizontal" aria-label={`${part.label} 높이 조절`} title="드래그해서 높이 조절 · 더블클릭하면 자동 높이" onPointerDown={(event) => startPartResize(event, part)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => { event.stopPropagation(); setPartHeightRatio(part.id, undefined); }}><span>{part.heightRatio ? `${EXPORT_WIDTH} × ${Math.round(part.heightRatio * EXPORT_WIDTH)}` : "높이 자동 · 아래로 드래그"}</span></div>}
                     <span className={`selection-tag part-label-tag ${selected.id === part.id ? "is-selected" : ""}`}>{String(parts.findIndex((item) => item.id === part.id) + 1).padStart(2, "0")} · {part.label}{selected.id === part.id ? " · 선택됨" : ""}</span>
                   </section>
                   );
@@ -946,6 +993,7 @@ export default function Studio() {
             </> : activeEditTab === "design" ? <>
               <div className="tab-intro"><Palette size={18}/><div><strong>파츠 디자인</strong><p>선택한 파츠의 구성과 페이지 전체 색감을 조정합니다.</p></div></div>
               {selected.id === "brand" ? <div className="field-group fixed-style-picker brand-image-picker"><label>브랜드 이미지 선택</label>{(Object.keys(brandImages) as BrandImageKey[]).map((key) => <button key={key} className={(selected.brandImage ?? "story") === key ? "active" : ""} onClick={() => updateBrandImage(key)}><img src={brandImages[key].src} alt="" className="brand-thumb"/><span><strong>{brandImages[key].label}</strong><small>{brandImages[key].description}</small></span>{(selected.brandImage ?? "story") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>이미지 안의 문구는 변경되지 않습니다. 상품 종류와 브랜드 표기에 맞는 이미지를 선택하세요.</span></div></div> : selected.id === "fixedNotice" ? <div className="field-group fixed-style-picker"><label>고정 안내 디자인</label>{(Object.keys(fixedNoticeStyles) as FixedNoticeStyle[]).map((key) => <button key={key} className={(selected.fixedNoticeStyle ?? "harvest") === key ? "active" : ""} onClick={() => updateFixedNoticeStyle(key)}><span className={`fixed-style-swatch swatch-${key}`}><i/><i/><i/></span><span><strong>{fixedNoticeStyles[key].label}</strong><small>{fixedNoticeStyles[key].description}</small></span>{(selected.fixedNoticeStyle ?? "harvest") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>디자인을 바꿔도 안내 문구와 고객센터 정보는 변경되지 않습니다.</span></div></div> : <>
+                <div className="field-group height-control"><label>파츠 높이 <span>{selected.heightRatio ? `${EXPORT_WIDTH} × ${Math.round(selected.heightRatio * EXPORT_WIDTH)}` : "자동"}</span></label><div className="height-mode"><button className={!selected.heightRatio ? "active" : ""} onClick={() => setPartHeightRatio(selected.id, undefined)}>자동</button><button className={selected.heightRatio && Math.abs(selected.heightRatio - FIT_RATIO) < 0.002 ? "active" : ""} onClick={() => setPartHeightRatio(selected.id, FIT_RATIO)}>{EXPORT_WIDTH}×{FIT_HEIGHT} 맞춤</button></div><small>미리보기에서 파츠 아래 가장자리를 드래그해 직접 조절할 수도 있어요(더블클릭하면 자동). 내용이 더 길면 잘리지 않도록 자동으로 늘어납니다.</small></div>
                 {selected.id === "summary" && <div className="field-group fixed-style-picker"><label>핵심 요약 디자인 형식</label>{(Object.keys(summaryStyles) as SummaryStyle[]).map((key) => <button key={key} className={(selected.summaryStyle ?? "cards") === key ? "active" : ""} onClick={() => updateSummaryStyle(key)}><span className={`summary-swatch sw-${key}`}><i/><i/><i/></span><span><strong>{summaryStyles[key].label}</strong><small>{summaryStyles[key].description}</small></span>{(selected.summaryStyle ?? "cards") === key && <Check size={15}/>}</button>)}</div>}
                 {selected.id !== "announcement" && selected.id !== "summary" && (
                 <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options layout-options-five">{layoutPresets.map(({key, label}) => { const currentLayout = selected.layout === "default" || !selected.layout ? "wide" : selected.layout === "card" ? "info" : selected.layout; return <button key={key} className={currentLayout === key ? "active" : ""} onClick={() => updateSelectedLayout(key)}><i className={`layout-preview-${key}`}/><span>{label}</span>{currentLayout === key && <Check size={13}/>}</button>; })}</div><small>콜라주는 업로드된 사진을 최대 4장까지 자동 조합합니다.</small></div>

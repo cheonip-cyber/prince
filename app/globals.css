@@ -530,3 +530,29 @@ button { color:inherit; cursor:pointer; }
 .sw-band { grid-template-columns:repeat(3,1fr); gap:0; background:#e6dcc9; }
 .sw-band i { background:none; border:0; border-left:1px solid #fff; border-radius:0; }
 .sw-band i:first-child { border-left:0; }
+
+/* ===== 파츠 높이: 자동 / 860×1100 맞춤 / 드래그 조절 (--part-ar = 가로 / 세로) ===== */
+.detail-page { container-type:inline-size; }
+/* 높이는 '최소 높이'로 적용: 860 폭 기준 N px를 현재 폭 비율로 환산하고, 내용이 더 길면 잘리지 않고 늘어남 */
+.preview-part.fit-height { min-height:calc(var(--part-h) * 100cqw / 860); display:flex; flex-direction:column; }
+.preview-part.fit-height>:is(.standard-part,.summary-grid,.announcement-part,.split-part,.review-part) { flex:1 1 auto; align-content:center; }
+.preview-part.fit-height:not(.layout-circle)>.part-photo-frame { flex:1 1 0; height:auto; min-height:160px; }
+.preview-part.fit-height.layout-circle { justify-content:center; }
+.preview-part.fit-height.layout-circle>.part-photo-frame { flex:none; }
+.preview-hero.fit-height { display:block; min-height:0; height:calc(var(--part-h) * 100cqw / 860); }
+.preview-hero.fit-height .photo-frame,.preview-hero.fit-height .hero-photo { height:100%; }
+.preview-part.has-part-image.fit-height.layout-split:not(.preview-hero):not(.preview-audience),
+.preview-part.has-part-image.fit-height.layout-info:not(.preview-hero):not(.preview-audience) { display:grid; }
+
+/* 편집용 높이 손잡이 (PNG·HTML 내보내기에서는 제거됨) */
+.part-resize-handle { position:absolute; left:0; right:0; bottom:0; height:22px; z-index:11; display:flex; align-items:flex-end; justify-content:center; cursor:ns-resize; touch-action:none; opacity:0; transition:opacity .12s; }
+.part-resize-handle::before { content:""; position:absolute; left:0; right:0; bottom:0; height:3px; background:#4b8c70; }
+.part-resize-handle span { position:relative; margin-bottom:3px; padding:3px 14px; border-radius:9px 9px 0 0; background:#2e6b52; color:#fff; font:600 10px "DM Sans","Noto Sans KR",sans-serif; letter-spacing:.2px; white-space:nowrap; }
+.preview-part:hover .part-resize-handle,.preview-part.selected-part .part-resize-handle,.part-resize-handle.is-dragging { opacity:1; }
+.part-resize-handle.is-dragging { height:44px; }
+
+.height-mode { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.height-mode button { height:36px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; color:#657169; font-size:12px; }
+.height-mode button:hover { border-color:#78a18d; color:#32664f; background:#f5faf7; }
+.height-mode button.active { border-color:#37765a; background:#eaf4ee; color:#2b6a4d; font-weight:700; }
+
