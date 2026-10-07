@@ -62,7 +62,7 @@ button { color:inherit; cursor:pointer; }
 .preview-label { width:min(680px,100%); margin:0 auto 9px; display:flex; justify-content:space-between; color:#8e9892; font:600 9px "DM Sans"; letter-spacing:.5px; }
 .preview-label span { display:flex; align-items:center; gap:5px; }
 .live-dot { width:6px; height:6px; background:#55a77e; border-radius:50%; box-shadow:0 0 0 3px rgba(85,167,126,.13); }
-.detail-page { width:min(680px,100%); margin:auto; display:flex; flex-direction:column; gap:36px; background:var(--page-gap); box-shadow:0 12px 36px rgba(42,59,50,.13); --page-primary:#3e684c; --page-accent:#e7835e; --page-bg:#fffaf0; --page-soft:#f6eadc; --page-gap:#eceee9; }
+.detail-page { width:min(680px,100%); margin:auto; display:flex; flex-direction:column; gap:56px; background:var(--page-gap); box-shadow:0 12px 36px rgba(42,59,50,.13); --page-primary:#3e684c; --page-accent:#e7835e; --page-bg:#fffaf0; --page-soft:#f6eadc; --page-gap:#eceee9; }
 .detail-page.theme-premium { --page-primary:#273d35; --page-accent:#b89756; --page-bg:#f3eee6; --page-soft:#e5ded2; --page-gap:#e9e6df; }
 .detail-page.theme-natural { --page-primary:#6c784c; --page-accent:#a35f3c; --page-bg:#f5ede1; --page-soft:#e8d7c1; --page-gap:#ebe5d9; }
 .preview-part { position:relative; background:#fff; cursor:pointer; transition:outline .15s; font-family:var(--part-font-family,"Noto Sans KR",sans-serif); font-size:calc(16px * var(--part-font-scale,1)); }
@@ -475,4 +475,7 @@ button { color:inherit; cursor:pointer; }
 .announcement-list li { display:grid; grid-template-columns:22px 1fr; column-gap:10px; font-size:1.125em; line-height:var(--part-line-height,2); color:#3d423f; white-space:pre-line; }
 .announcement-icon { display:flex; align-items:center; height:calc(1em * var(--part-line-height,2)); color:var(--page-accent); }
 .announcement-list li.announcement-note { display:block; padding-left:32px; font-size:1em; color:#7a807c; }
+
+/* ===== 이미지-텍스트 근접 배치: 글은 바로 위의 자기 이미지에 붙이고, 다음 파츠 이미지와는 멀리 ===== */
+.preview-part.has-part-image:not(.layout-split):not(.layout-info):not(.layout-circle) .standard-part { padding-top:40px; border-top:0; }
 
