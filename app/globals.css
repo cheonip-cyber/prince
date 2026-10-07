@@ -477,7 +477,10 @@ button { color:inherit; cursor:pointer; }
 .announcement-list li.announcement-note { display:block; padding-left:32px; font-size:1em; color:#7a807c; }
 
 /* ===== 이미지-텍스트 근접 배치: 글은 바로 위의 자기 이미지에 붙이고, 다음 파츠 이미지와는 멀리 ===== */
-.preview-part.has-part-image:not(.layout-split):not(.layout-info):not(.layout-circle) .standard-part { padding-top:40px; border-top:0; }
+/* 글 → 사진 순서: 글은 아래의 자기 사진에 붙이고(40px), 다음 파츠 글과는 멀리(56px 간격 + 82px 여백) */
+.preview-part.has-part-image:not(.layout-split):not(.layout-info):not(.layout-circle) .standard-part { padding-bottom:40px; min-height:0; }
+.preview-part.has-part-image.layout-circle .standard-part { padding:0 24px 38px; }
+.preview-part.has-part-image.layout-info:not(.preview-hero):not(.preview-audience) { grid-template-columns:1.1fr .9fr; }
 
 /* ===== 줄바꿈: 단어 중간에서 끊기지 않고, 마지막 줄에 한두 글자만 남지 않게 균형 배분 ===== */
 .preview-part { word-break:keep-all; overflow-wrap:break-word; }
