@@ -106,7 +106,7 @@ const initialParts: Part[] = [
   { id: "storage", code: "P10", label: "보관법", title: "맛있는 때를 기다려 주세요", body: "수령 후 서늘한 곳에서 후숙하고, 말랑해지면 냉장 보관해 주세요.", visible: true, required: true },
   { id: "shipping", code: "P11", label: "포장·배송", title: "흔들림은 줄이고, 정성은 더하고", body: "과일 전용 완충재로 안전하게 포장해 순차 출고합니다.", visible: true, required: true },
   { id: "reviews", code: "P13", label: "별점·후기", title: "먼저 경험한 만족 포인트", body: "향과 식감, 포장과 구성에서 만족하기 좋은 포인트를 모았습니다.", visible: true },
-  { id: "notice", code: "P12", label: "주의·FAQ", title: "구매 전 꼭 확인해 주세요", body: "신선식품 특성상 단순 변심 교환은 어렵습니다. 파손 시 수령 당일 사진과 함께 문의해 주세요.", visible: true, required: true },
+  { id: "fixedNotice", code: "P14", label: "교환·반품 고정안내", title: "꼭 확인해주세요", body: "교환·반품 및 개인정보 제공 안내", visible: true, fixedNoticeStyle: "harvest" },
 ];
 
 const themeMap = {
@@ -154,7 +154,7 @@ const optionalParts: Part[] = [
   { id: "origin", code: "P05", label: "산지·선별", title: "좋은 땅에서 정성껏 골랐습니다", body: "산지에서 상태를 살펴 선별하고 신선함을 지켜 포장합니다.", visible: true },
   { id: "evidence", code: "P08", label: "품질 근거", title: "확인 가능한 정보만 담았습니다", body: "등록된 인증서나 측정 근거가 있을 때만 품질 정보로 표시합니다.", visible: true },
   { id: "usage", code: "P09", label: "섭취·활용", title: "더 맛있게 즐기는 방법", body: "깨끗이 씻어 그대로 즐기거나 차갑게 보관해 시원하게 드셔보세요.", visible: true },
-  { id: "fixedNotice", code: "P14", label: "교환·반품 고정안내", title: "꼭 확인해주세요", body: "교환·반품 및 개인정보 제공 안내", visible: true, fixedNoticeStyle: "harvest" },
+  { id: "notice", code: "P12", label: "주의·FAQ", title: "구매 전 꼭 확인해 주세요", body: "신선식품 특성상 단순 변심 교환은 어렵습니다. 파손 시 수령 당일 사진과 함께 문의해 주세요.", visible: true },
   { id: "brand", code: "P15", label: "브랜드 이미지", title: "프린스팜 브랜드", body: "브랜드 이미지 선택형 파츠", visible: true, brandImage: "story" },
 ];
 const allPartTemplates = [...initialParts, ...optionalParts].sort((a, b) => a.code.localeCompare(b.code));
@@ -504,10 +504,11 @@ export default function Studio() {
     const next = allPartTemplates.find((candidate) => candidate.id === partId);
     if (!next || parts.some((part) => part.id === next.id)) return;
     setParts((current) => {
-      const noticeIndex = current.findIndex((part) => part.id === "notice");
+      const tailIndex = current.findIndex((part) => part.id === "notice" || part.id === "fixedNotice");
+      const fixedIndex = current.findIndex((part) => part.id === "fixedNotice");
       const heroIndex = current.findIndex((part) => part.id === "hero");
       const afterHero = Math.min(heroIndex + 1, current.length) + (current[heroIndex + 1]?.id === "brand" ? 1 : 0);
-      const insertAt = next.id === "brand" ? Math.min(1, current.length) : next.id === "announcement" ? afterHero : noticeIndex < 0 ? current.length : noticeIndex;
+      const insertAt = next.id === "brand" ? Math.min(1, current.length) : next.id === "announcement" ? afterHero : next.id === "fixedNotice" ? current.length : next.id === "notice" ? (fixedIndex < 0 ? current.length : fixedIndex) : tailIndex < 0 ? current.length : tailIndex;
       return [...current.slice(0, insertAt), { ...next }, ...current.slice(insertAt)];
     });
     setSelectedId(next.id); setActiveView("editor"); setActiveEditTab(isLockedPart(next.id) ? "design" : "content"); setShowPartLibrary(false); setSaved(false);
