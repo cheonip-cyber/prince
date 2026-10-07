@@ -53,6 +53,7 @@ type ImageModel = "gpt-image-2.5-flare" | "gpt-image-2.5-sunburst";
 type FontKey = "clean" | "serif" | "friendly";
 type ImageRole = "gift" | "origin" | "package" | "closeup";
 type FixedNoticeStyle = "harvest" | "clean" | "premium";
+type SummaryStyle = "cards" | "list" | "number" | "band";
 type BrandImageKey = "story" | "collage" | "orchard" | "harvest";
 type Part = {
   id: string;
@@ -70,6 +71,7 @@ type Part = {
   fontScale?: number;
   lineHeight?: number;
   fixedNoticeStyle?: FixedNoticeStyle;
+  summaryStyle?: SummaryStyle;
   brandImage?: BrandImageKey;
   copy?: Record<string, string>;
 };
@@ -141,6 +143,13 @@ const fixedNoticeStyles = {
   clean: { label: "클린 안내서형", description: "화이트·그린 중심의 명확한 정보" },
   premium: { label: "프리미엄 보증서형", description: "딥그린·골드 중심의 고급 안내" },
 } satisfies Record<FixedNoticeStyle, { label: string; description: string }>;
+
+const summaryStyles = {
+  cards: { label: "카드형", description: "아치형 카드 3개를 가로로 배치" },
+  list: { label: "세로 리스트형", description: "번호 원과 설명을 한 줄씩 나열" },
+  number: { label: "큰 번호형", description: "큰 숫자와 상단 라인으로 구분" },
+  band: { label: "컬러 띠형", description: "연한 색 띠 안에서 3단으로 구분" },
+} satisfies Record<SummaryStyle, { label: string; description: string }>;
 
 const brandImages = {
   story: { label: "브랜드 스토리 A", description: "슬로건·캐릭터·브랜드 박스 (과일 공통)", src: "/generated/prince-farm-brand-hero-860-v1-character-v2.png", alt: "프린스팜 브랜드 스토리 — 우리가 전하는 것은 농산물이 아니라 좋은 마음입니다" },
@@ -563,6 +572,11 @@ export default function Studio() {
     setSaved(false);
   };
 
+  const updateSummaryStyle = (summaryStyle: SummaryStyle) => {
+    setParts((current) => current.map((part) => part.id === selected.id ? { ...part, summaryStyle } : part));
+    setSaved(false);
+  };
+
   const updateFixedNoticeStyle = (fixedNoticeStyle: FixedNoticeStyle) => {
     setParts((current) => current.map((part) => part.id === selected.id ? { ...part, fixedNoticeStyle } : part));
     setSaved(false);
@@ -841,7 +855,7 @@ export default function Studio() {
               <div className={`detail-page theme-${theme}`} ref={previewRef}>
                 {visibleParts.map((part) => {
                   const assignedAsset = mediaAssets.find((asset) => asset.id === part.imageAssetId);
-                  const activeLayout = part.layout === "default" || !part.layout ? "wide" : part.layout === "card" ? "info" : part.layout;
+                  const activeLayout = part.id === "summary" ? "wide" : part.layout === "default" || !part.layout ? "wide" : part.layout === "card" ? "info" : part.layout;
                   const galleryAssets = assignedAsset
                     ? [assignedAsset, ...mediaAssets.filter((asset) => asset.id !== assignedAsset.id)].slice(0, 4)
                     : mediaAssets.slice(0, 4);
@@ -860,7 +874,7 @@ export default function Studio() {
                       <div className={`photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" && galleryAssets.length ? galleryAssets : [{ id: "hero-fallback", src: assignedAsset?.src ?? heroImage }]).map((asset) => <img key={asset.id} src={asset.src} alt={`${productName} 대표 상품`} className="hero-photo" style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }} />)}</div>
                       <div className="hero-overlay"><span className="eyebrow">{copyOf(part, "kicker")}</span><h1>{part.title}</h1><p>{part.body}</p><div className="hero-meta"><span>{copyOf(part, "metaOrigin")}</span><span>{weight}</span><span>{copyOf(part, "metaCategory")}</span></div></div>
                     </>}
-                    {part.id === "summary" && <div className="summary-grid"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="summary-cards">{[1, 2, 3].map((number) => <article key={number}><b>{copyOf(part, `card${number}Number`)}</b><strong>{copyOf(part, `card${number}Title`)}</strong><span>{copyOf(part, `card${number}Body`)}</span></article>)}</div></div>}
+                    {part.id === "summary" && <div className={`summary-grid summary-style-${part.summaryStyle ?? "cards"}`}><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="summary-cards">{[1, 2, 3].map((number) => <article key={number}><b>{copyOf(part, `card${number}Number`)}</b><strong>{copyOf(part, `card${number}Title`)}</strong><span>{copyOf(part, `card${number}Body`)}</span></article>)}</div></div>}
                     {part.id === "audience" && <div className="split-part"><div><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><ul>{[1, 2, 3].map((number) => <li key={number}><Check size={16}/> {copyOf(part, `bullet${number}`)}</li>)}</ul></div><div className="peach-crop"><img src={assignedAsset?.src ?? heroImage} alt={productName} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/></div></div>}
                     {part.id === "reviews" && <div className="review-part"><span className="section-kicker">{copyOf(part, "kicker")}</span><h2>{part.title}</h2><p>{part.body}</p><div className="review-cards">{[1, 2, 3].map((number) => <article key={number}><div className="review-stars" aria-label="별점 5점">{[1, 2, 3, 4, 5].map((star) => <Star key={star} size={15} fill="currentColor"/>)}</div><strong>{copyOf(part, `review${number}Title`)}</strong><p>{copyOf(part, `review${number}Body`)}</p><small>{copyOf(part, `review${number}Author`)}</small></article>)}</div></div>}
                     {!["hero", "summary", "audience", "reviews", "fixedNotice", "brand", "announcement"].includes(part.id) && <>{(assignedAsset || (activeLayout === "collage" && galleryAssets.length > 0)) && <div className={`part-photo-frame ${activeLayout === "collage" ? "photo-collage" : ""}`}>{(activeLayout === "collage" ? galleryAssets : assignedAsset ? [assignedAsset] : []).map((asset) => <img key={asset.id} src={asset.src} alt={`${part.label}용 ${productName}`} style={{ objectPosition: `50% ${part.imageFocus ?? 50}%`, transform: `scale(${(part.imageZoom ?? 100) / 100})` }}/>) }{assignedAsset?.source === "ai" && <span>{copyOf(part, "imageBadge", "AI 연출 이미지")}</span>}</div>}<div className="standard-part"><span className="section-kicker">{copyOf(part, "kicker", part.label)}</span><h2>{part.title}</h2><p>{part.body.replace("2kg 한 상자, 8~10과", weight).replace("경북 영천", origin)}</p>{part.id === "options" && <><div className="composition-grid">{[1, 2, 3].map((number) => <article key={number}><span>{number}</span><strong>{copyOf(part, `composition${number}Name`)}</strong><b>{copyOf(part, `composition${number}Value`)}</b></article>)}</div><p className="composition-note">{copyOf(part, "compositionNote")}</p><div className="option-card"><div><small>{copyOf(part, "factWeightLabel")}</small><strong>{weight}</strong></div><div><small>{copyOf(part, "factOriginLabel")}</small><strong>{origin}</strong></div><div><small>{copyOf(part, "factNameLabel")}</small><strong>{productName}</strong></div></div></>}{part.id === "notice" && <div className="notice-box"><ShieldCheck size={22}/><span>{copyOf(part, "noticeTitle")}<br/><small>{copyOf(part, "noticeBody")}</small></span></div>}</div></>}
@@ -932,7 +946,8 @@ export default function Studio() {
             </> : activeEditTab === "design" ? <>
               <div className="tab-intro"><Palette size={18}/><div><strong>파츠 디자인</strong><p>선택한 파츠의 구성과 페이지 전체 색감을 조정합니다.</p></div></div>
               {selected.id === "brand" ? <div className="field-group fixed-style-picker brand-image-picker"><label>브랜드 이미지 선택</label>{(Object.keys(brandImages) as BrandImageKey[]).map((key) => <button key={key} className={(selected.brandImage ?? "story") === key ? "active" : ""} onClick={() => updateBrandImage(key)}><img src={brandImages[key].src} alt="" className="brand-thumb"/><span><strong>{brandImages[key].label}</strong><small>{brandImages[key].description}</small></span>{(selected.brandImage ?? "story") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>이미지 안의 문구는 변경되지 않습니다. 상품 종류와 브랜드 표기에 맞는 이미지를 선택하세요.</span></div></div> : selected.id === "fixedNotice" ? <div className="field-group fixed-style-picker"><label>고정 안내 디자인</label>{(Object.keys(fixedNoticeStyles) as FixedNoticeStyle[]).map((key) => <button key={key} className={(selected.fixedNoticeStyle ?? "harvest") === key ? "active" : ""} onClick={() => updateFixedNoticeStyle(key)}><span className={`fixed-style-swatch swatch-${key}`}><i/><i/><i/></span><span><strong>{fixedNoticeStyles[key].label}</strong><small>{fixedNoticeStyles[key].description}</small></span>{(selected.fixedNoticeStyle ?? "harvest") === key && <Check size={15}/>}</button>)}<div className="fixed-design-note"><LockKeyhole size={15}/><span>디자인을 바꿔도 안내 문구와 고객센터 정보는 변경되지 않습니다.</span></div></div> : <>
-                {selected.id !== "announcement" && (
+                {selected.id === "summary" && <div className="field-group fixed-style-picker"><label>핵심 요약 디자인 형식</label>{(Object.keys(summaryStyles) as SummaryStyle[]).map((key) => <button key={key} className={(selected.summaryStyle ?? "cards") === key ? "active" : ""} onClick={() => updateSummaryStyle(key)}><span className={`summary-swatch sw-${key}`}><i/><i/><i/></span><span><strong>{summaryStyles[key].label}</strong><small>{summaryStyles[key].description}</small></span>{(selected.summaryStyle ?? "cards") === key && <Check size={15}/>}</button>)}</div>}
+                {selected.id !== "announcement" && selected.id !== "summary" && (
                 <div className="field-group"><label>파츠 레이아웃</label><div className="layout-options layout-options-five">{layoutPresets.map(({key, label}) => { const currentLayout = selected.layout === "default" || !selected.layout ? "wide" : selected.layout === "card" ? "info" : selected.layout; return <button key={key} className={currentLayout === key ? "active" : ""} onClick={() => updateSelectedLayout(key)}><i className={`layout-preview-${key}`}/><span>{label}</span>{currentLayout === key && <Check size={13}/>}</button>; })}</div><small>콜라주는 업로드된 사진을 최대 4장까지 자동 조합합니다.</small></div>
                 )}
                 <div className="field-group"><label>텍스트 폰트</label><div className="font-options">{(Object.keys(fontMap) as FontKey[]).map((key) => <button key={key} className={(selected.fontFamily ?? "clean") === key ? "active" : ""} onClick={() => updateSelectedTypography("fontFamily", key)} style={{fontFamily: fontMap[key].family}}><span><strong>{fontMap[key].label}</strong><small>{fontMap[key].sample}</small></span>{(selected.fontFamily ?? "clean") === key && <Check size={14}/>}</button>)}</div></div>

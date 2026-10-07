@@ -479,3 +479,51 @@ button { color:inherit; cursor:pointer; }
 /* ===== 이미지-텍스트 근접 배치: 글은 바로 위의 자기 이미지에 붙이고, 다음 파츠 이미지와는 멀리 ===== */
 .preview-part.has-part-image:not(.layout-split):not(.layout-info):not(.layout-circle) .standard-part { padding-top:40px; border-top:0; }
 
+/* ===== 줄바꿈: 단어 중간에서 끊기지 않고, 마지막 줄에 한두 글자만 남지 않게 균형 배분 ===== */
+.preview-part { word-break:keep-all; overflow-wrap:break-word; }
+.hero-overlay p,
+.summary-grid>p,
+.standard-part>p,
+.split-part p,
+.review-part>p { text-wrap:balance; }
+
+/* ===== 설명 글자색: 검정 (히어로 사진 위 흰 글자는 제외) ===== */
+.summary-grid>p,
+.standard-part>p,
+.standard-part>.composition-note,
+.split-part p,
+.split-part li,
+.review-part>p,
+.summary-cards span,
+.review-cards p,
+.announcement-list li,
+.announcement-list li.announcement-note { color:#000; }
+
+/* ===== 핵심 요약 디자인 형식 4종 ===== */
+/* 세로 리스트형 */
+.summary-style-list .summary-cards { grid-template-columns:1fr; gap:14px; }
+.summary-style-list .summary-cards article { display:grid; grid-template-columns:52px 1fr; grid-template-rows:auto auto; column-gap:20px; row-gap:2px; align-items:center; text-align:left; min-height:0; padding:22px 26px; border-radius:14px; }
+.summary-style-list .summary-cards b { grid-row:1 / span 2; width:52px; height:52px; display:grid; place-items:center; border-radius:50%; background:var(--page-accent); color:#fff; font-size:1.125em; font-weight:700; }
+.summary-style-list .summary-cards strong { margin:0; align-self:end; }
+.summary-style-list .summary-cards span { align-self:start; }
+/* 큰 번호형 */
+.summary-style-number .summary-cards { gap:22px; }
+.summary-style-number .summary-cards article { min-height:0; padding:18px 4px 0; background:none; border:0; border-top:3px solid var(--page-primary); border-radius:0; align-items:flex-start; text-align:left; }
+.summary-style-number .summary-cards b { font-size:2.5em; line-height:1; font-weight:800; }
+.summary-style-number .summary-cards strong { margin:14px 0 8px; }
+/* 컬러 띠형 */
+.summary-style-band .summary-cards { gap:0; background:var(--page-soft); border-radius:18px; overflow:hidden; }
+.summary-style-band .summary-cards article { min-height:190px; padding:32px 14px; background:none; border:0; border-radius:0; }
+.summary-style-band .summary-cards article+article { border-left:1px solid color-mix(in srgb,var(--page-primary) 18%,transparent); }
+
+/* 편집 패널의 디자인 형식 미리보기 아이콘 */
+.summary-swatch { width:46px; height:36px; flex:none; display:grid; gap:3px; padding:3px; border-radius:6px; background:#eef2ef; }
+.summary-swatch i { background:#fff; border:1px solid #c5d0c9; border-radius:3px; }
+.sw-cards { grid-template-columns:repeat(3,1fr); }
+.sw-cards i { border-radius:10px 10px 2px 2px; }
+.sw-list { grid-template-rows:repeat(3,1fr); }
+.sw-number { grid-template-columns:repeat(3,1fr); }
+.sw-number i { background:none; border:0; border-top:3px solid #37765a; border-radius:0; }
+.sw-band { grid-template-columns:repeat(3,1fr); gap:0; background:#e6dcc9; }
+.sw-band i { background:none; border:0; border-left:1px solid #fff; border-radius:0; }
+.sw-band i:first-child { border-left:0; }
