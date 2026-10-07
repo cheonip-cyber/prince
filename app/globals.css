@@ -100,7 +100,7 @@ button { color:inherit; cursor:pointer; }
 .split-part li svg { color:var(--page-accent); }
 .peach-crop { overflow:hidden; margin:30px 30px 30px 0; border-radius:120px 120px 12px 12px; }
 .peach-crop img { width:100%; height:100%; object-fit:cover; transform:scale(1.25); }
-.part-photo-frame { position:relative; height:300px; overflow:hidden; background:#e7ece8; }
+.part-photo-frame { position:relative; height:450px; overflow:hidden; background:#e7ece8; }
 .part-photo-frame img { width:100%; height:100%; display:block; object-fit:cover; }
 .part-photo-frame>span { position:absolute; left:12px; bottom:12px; padding:5px 8px; border-radius:12px; color:#fff; background:rgba(27,45,36,.7); backdrop-filter:blur(5px); font-size:.5em; }
 .standard-part { padding:82px 58px; text-align:center; background:var(--page-bg); border-top:1px solid rgba(108,101,84,.07); min-height:295px; }
@@ -125,7 +125,7 @@ button { color:inherit; cursor:pointer; }
 .preview-summary.layout-split .summary-grid>p { margin:0; }
 .preview-summary.layout-split .summary-cards { grid-column:1 / -1; }
 .preview-part.has-part-image.layout-split:not(.preview-hero):not(.preview-audience) { display:grid; grid-template-columns:1fr 1fr; }
-.preview-part.has-part-image.layout-split:not(.preview-hero):not(.preview-audience) .part-photo-frame { height:auto; min-height:310px; }
+.preview-part.has-part-image.layout-split:not(.preview-hero):not(.preview-audience) .part-photo-frame { height:auto; min-height:465px; }
 .preview-part.has-part-image.layout-split:not(.preview-hero):not(.preview-audience) .standard-part { display:block; min-width:0; text-align:left; padding:55px 38px; }
 .preview-part.has-part-image.layout-split:not(.preview-hero):not(.preview-audience) .standard-part>p { margin:0; }
 .photo-collage { display:grid; grid-template-columns:1.15fr .85fr; grid-template-rows:repeat(3,1fr); gap:4px; padding:4px; background:#fff; }
@@ -139,7 +139,7 @@ button { color:inherit; cursor:pointer; }
 .preview-hero.layout-circle .hero-overlay h1,.preview-hero.layout-circle .hero-overlay p { width:100%; }
 .preview-part.layout-circle .standard-part { min-height:0; padding:44px 24px 10px; border:0; }
 .preview-part.has-part-image.layout-info:not(.preview-hero):not(.preview-audience) { display:grid; grid-template-columns:.9fr 1.1fr; background:var(--page-bg); }
-.preview-part.has-part-image.layout-info:not(.preview-hero):not(.preview-audience) .part-photo-frame { height:auto; min-height:390px; }
+.preview-part.has-part-image.layout-info:not(.preview-hero):not(.preview-audience) .part-photo-frame { height:auto; min-height:585px; }
 .preview-part.has-part-image.layout-info:not(.preview-hero):not(.preview-audience) .standard-part { min-height:390px; padding:54px 38px; text-align:left; }
 .preview-part.has-part-image.layout-info:not(.preview-hero):not(.preview-audience) .standard-part>p { margin:0; }
 .preview-hero.layout-info { min-height:530px; display:grid; grid-template-columns:1.05fr .95fr; background:var(--page-primary); }
@@ -536,7 +536,7 @@ button { color:inherit; cursor:pointer; }
 /* 높이는 '최소 높이'로 적용: 860 폭 기준 N px를 현재 폭 비율로 환산하고, 내용이 더 길면 잘리지 않고 늘어남 */
 .preview-part.fit-height { min-height:calc(var(--part-h) * 100cqw / 860); display:flex; flex-direction:column; }
 .preview-part.fit-height>:is(.standard-part,.summary-grid,.announcement-part,.split-part,.review-part) { flex:1 1 auto; align-content:center; }
-.preview-part.fit-height:not(.layout-circle)>.part-photo-frame { flex:1 1 0; height:auto; min-height:160px; }
+.preview-part.fit-height:not(.layout-circle)>.part-photo-frame { flex:none; }
 .preview-part.fit-height.layout-circle { justify-content:center; }
 .preview-part.fit-height.layout-circle>.part-photo-frame { flex:none; }
 .preview-hero.fit-height { display:block; min-height:0; height:calc(var(--part-h) * 100cqw / 860); }
@@ -555,4 +555,15 @@ button { color:inherit; cursor:pointer; }
 .height-mode button { height:36px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; color:#657169; font-size:12px; }
 .height-mode button:hover { border-color:#78a18d; color:#32664f; background:#f5faf7; }
 .height-mode button.active { border-color:#37765a; background:#eaf4ee; color:#2b6a4d; font-weight:700; }
+
+/* ===== 사진 영역 높이 수동 조절 (--photo-h = 860 폭 기준 px) ===== */
+.preview-part.photo-sized:not(.layout-circle)>.part-photo-frame { height:calc(var(--photo-h) * 100cqw / 860); }
+.preview-part.has-part-image.photo-sized.layout-split:not(.preview-hero):not(.preview-audience)>.part-photo-frame,
+.preview-part.has-part-image.photo-sized.layout-info:not(.preview-hero):not(.preview-audience)>.part-photo-frame { height:auto; min-height:calc(var(--photo-h) * 100cqw / 860); }
+
+/* 편집용 사진 높이 손잡이 (PNG·HTML 내보내기에서는 제거됨) */
+.photo-resize-handle { position:absolute; left:0; right:0; bottom:26px; height:24px; z-index:11; display:flex; align-items:center; justify-content:center; cursor:ns-resize; touch-action:none; opacity:0; transition:opacity .12s; }
+.photo-resize-handle::before { content:""; position:absolute; left:0; right:0; top:50%; border-top:2px dashed #fff; filter:drop-shadow(0 0 2px rgba(0,0,0,.55)); }
+.photo-resize-handle span { position:relative; padding:3px 12px; border-radius:9px; background:#d8794f; color:#fff; font:600 10px "DM Sans","Noto Sans KR",sans-serif; letter-spacing:.2px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,.25); }
+.part-photo-frame:hover .photo-resize-handle,.preview-part.selected-part .photo-resize-handle,.photo-resize-handle.is-dragging { opacity:1; }
 
